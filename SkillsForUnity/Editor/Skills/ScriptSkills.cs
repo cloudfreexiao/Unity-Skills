@@ -11,7 +11,14 @@ namespace UnitySkills
     /// </summary>
     public static class ScriptSkills
     {
-        [UnitySkill("script_create", "Create a new C# script")]
+        [UnitySkill("script_create", "Create a new C# script. Optional: namespace")]
+        public static object ScriptCreate(string scriptName, string folder = "Assets/Scripts", string template = null, string namespaceName = null)
+        {
+            if (!Directory.Exists(folder))
+                Directory.CreateDirectory(folder);
+
+            var path = Path.Combine(folder, scriptName + ".cs");
+
             if (File.Exists(path))
                 return new { error = $"Script already exists: {path}" };
 
@@ -110,8 +117,6 @@ public class {CLASS} : MonoBehaviour
                     }
                 }
 
-                // Batch Operations usually trigger Domain Reload.
-                // We let Unity handle it, but warn client that server might restart.
                 return new
                 {
                     success = failCount == 0,
@@ -135,14 +140,6 @@ public class {CLASS} : MonoBehaviour
             public string template { get; set; }
             public string namespaceName { get; set; }
         }
-
-        [UnitySkill("script_create", "Create a new C# script. Optional: namespace")]
-        public static object ScriptCreate(string scriptName, string folder = "Assets/Scripts", string template = null, string namespaceName = null)
-        {
-            if (!Directory.Exists(folder))
-                Directory.CreateDirectory(folder);
-
-            var path = Path.Combine(folder, scriptName + ".cs");
 
         [UnitySkill("script_read", "Read the contents of a script")]
         public static object ScriptRead(string scriptPath)
