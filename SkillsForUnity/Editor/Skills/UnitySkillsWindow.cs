@@ -758,12 +758,43 @@ namespace UnitySkills
             {
                 WorkflowManager.LoadHistory();
             }
+            EditorGUILayout.EndHorizontal();
+
+            EditorGUILayout.Space(8);
+
+            // Warning box about workflow cache
+            EditorGUILayout.HelpBox(
+                Localization.Current == Localization.Language.Chinese
+                    ? "⚠️ 工作流缓存说明：\n• 缓存包含资产文件的完整备份（Base64编码），可能占用较大空间\n• 清除缓存后将无法撤销/恢复之前的 AI 操作\n• 脚本文件(.cs)不会被备份，仅记录元数据"
+                    : "⚠️ Workflow Cache Info:\n• Cache contains full asset backups (Base64 encoded), may use significant space\n• Clearing cache will prevent undo/redo of previous AI operations\n• Script files (.cs) are not backed up, only metadata is recorded",
+                MessageType.Warning
+            );
+
+            EditorGUILayout.Space(4);
+
+            // Clear cache button
+            EditorGUILayout.BeginHorizontal();
+            GUILayout.FlexibleSpace();
             var originalBg = GUI.backgroundColor;
-            GUI.backgroundColor = WarningColor;
-            if (GUILayout.Button(Localization.Current == Localization.Language.Chinese ? "清空" : "Clear", GUILayout.Width(60)))
+            GUI.backgroundColor = ErrorColor;
+            if (GUILayout.Button(Localization.Current == Localization.Language.Chinese ? "🗑️ 清除工作流缓存" : "🗑️ Clear Workflow Cache", GUILayout.Width(160), GUILayout.Height(24)))
             {
-                if (EditorUtility.DisplayDialog("Confirm", "Clear all history?", "Yes", "No"))
+                var confirmMsg = Localization.Current == Localization.Language.Chinese
+                    ? "确定要清除所有工作流缓存吗？\n\n⚠️ 警告：此操作不可逆！\n• 所有 AI 操作历史将被删除\n• 无法再撤销/恢复之前的操作\n• 资产备份数据将被清除"
+                    : "Are you sure you want to clear all workflow cache?\n\n⚠️ Warning: This action is irreversible!\n• All AI operation history will be deleted\n• Cannot undo/redo previous operations\n• Asset backup data will be cleared";
+
+                if (EditorUtility.DisplayDialog(
+                    Localization.Current == Localization.Language.Chinese ? "清除工作流缓存" : "Clear Workflow Cache",
+                    confirmMsg,
+                    Localization.Current == Localization.Language.Chinese ? "确定清除" : "Clear",
+                    Localization.Current == Localization.Language.Chinese ? "取消" : "Cancel"))
+                {
                     WorkflowManager.ClearHistory();
+                    EditorUtility.DisplayDialog(
+                        "Success",
+                        Localization.Current == Localization.Language.Chinese ? "工作流缓存已清除" : "Workflow cache cleared",
+                        "OK");
+                }
             }
             GUI.backgroundColor = originalBg;
             EditorGUILayout.EndHorizontal();
