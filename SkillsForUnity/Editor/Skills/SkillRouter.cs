@@ -163,7 +163,27 @@ namespace UnitySkills
                 // Commit transaction
                 UnityEditor.Undo.CollapseUndoOperations(undoGroup);
 
-                
+                // ========== 统一错误响应检测 ==========
+                if (result != null)
+                {
+                    var resultJson = JObject.FromObject(result);
+                    var hasError = resultJson.ContainsKey("error");
+                    var successFalse = resultJson.TryGetValue("success", out var s) && s.Type == JTokenType.Boolean && !s.ToObject<bool>();
+
+                    // 模式A: { error = "..." } 或 模式B: { success = false, error = "..." }
+                    if (hasError && (!resultJson.ContainsKey("success") || successFalse))
+                    {
+                        return JsonConvert.SerializeObject(new
+                        {
+                            status = "error",
+                            errorCode = "SKILL_ERROR",
+                            error = resultJson["error"]?.ToString(),
+                            skill = name
+                        }, _jsonSettings);
+                    }
+                }
+                // =========================================
+
                 if (!verbose && result != null)
                 {
                     // "Summary Mode" Logic
