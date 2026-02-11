@@ -16,6 +16,8 @@ namespace UnitySkills
             if (!File.Exists(sourcePath) && !Directory.Exists(sourcePath))
                 return new { error = $"Source not found: {sourcePath}" };
 
+            if (Validate.SafePath(destinationPath, "destinationPath") is object err) return err;
+
             var dir = Path.GetDirectoryName(destinationPath);
             if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
                 Directory.CreateDirectory(dir);
@@ -33,6 +35,8 @@ namespace UnitySkills
         [UnitySkill("asset_delete", "Delete an asset")]
         public static object AssetDelete(string assetPath)
         {
+            if (Validate.SafePath(assetPath, "assetPath", isDelete: true) is object err) return err;
+
             if (!File.Exists(assetPath) && !Directory.Exists(assetPath))
                 return new { error = $"Asset not found: {assetPath}" };
 
@@ -47,6 +51,9 @@ namespace UnitySkills
         [UnitySkill("asset_move", "Move or rename an asset")]
         public static object AssetMove(string sourcePath, string destinationPath)
         {
+            if (Validate.SafePath(sourcePath, "sourcePath") is object err1) return err1;
+            if (Validate.SafePath(destinationPath, "destinationPath") is object err2) return err2;
+
             // 移动前记录资产状态
             var asset = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(sourcePath);
             if (asset != null) WorkflowManager.SnapshotObject(asset);
@@ -73,6 +80,11 @@ namespace UnitySkills
                 try {
                     foreach (var item in itemList) {
                         try {
+                            // 安全校验
+                            if (Validate.SafePath(item.destinationPath, "destinationPath") is object dstErr) {
+                                results.Add(new { target = item.destinationPath, success = false, error = ((dynamic)dstErr).error });
+                                continue;
+                            }
                             if (!File.Exists(item.sourcePath)) {
                                 results.Add(new { target = item.sourcePath, success = false, error = "File not found" });
                                 continue;
@@ -115,6 +127,11 @@ namespace UnitySkills
                 try {
                     foreach (var item in itemList) {
                         try {
+                            // 安全校验
+                            if (Validate.SafePath(item.path, "path", isDelete: true) is object pathErr) {
+                                results.Add(new { target = item.path, success = false, error = ((dynamic)pathErr).error });
+                                continue;
+                            }
                             var asset = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(item.path);
                             if (asset != null) WorkflowManager.SnapshotObject(asset);
                             if (AssetDatabase.DeleteAsset(item.path)) {
@@ -152,6 +169,15 @@ namespace UnitySkills
                 AssetDatabase.StartAssetEditing();
                 try {
                     foreach (var item in itemList) {
+                        // 安全校验
+                        if (Validate.SafePath(item.sourcePath, "sourcePath") is object srcErr) {
+                            results.Add(new { target = item.sourcePath, success = false, error = ((dynamic)srcErr).error });
+                            continue;
+                        }
+                        if (Validate.SafePath(item.destinationPath, "destinationPath") is object dstErr) {
+                            results.Add(new { target = item.sourcePath, success = false, error = ((dynamic)dstErr).error });
+                            continue;
+                        }
                         var asset = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(item.sourcePath);
                         if (asset != null) WorkflowManager.SnapshotObject(asset);
                         string error = AssetDatabase.MoveAsset(item.sourcePath, item.destinationPath);
@@ -176,6 +202,8 @@ namespace UnitySkills
         [UnitySkill("asset_duplicate", "Duplicate an asset")]
         public static object AssetDuplicate(string assetPath)
         {
+            if (Validate.SafePath(assetPath, "assetPath") is object err) return err;
+
             var newPath = AssetDatabase.GenerateUniqueAssetPath(assetPath);
             AssetDatabase.CopyAsset(assetPath, newPath);
 

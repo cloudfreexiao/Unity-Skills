@@ -16,6 +16,37 @@ namespace UnitySkills
         /// </summary>
         public static object Required(string value, string paramName) =>
             string.IsNullOrEmpty(value) ? new { error = $"{paramName} is required" } : null;
+
+        /// <summary>
+        /// Validate asset path for safety. Prevents path traversal and restricts to Assets/Packages.
+        /// Usage: if (Validate.SafePath(path, "path") is object err) return err;
+        /// </summary>
+        public static object SafePath(string path, string paramName, bool isDelete = false)
+        {
+            if (string.IsNullOrEmpty(path))
+                return new { error = $"{paramName} is required" };
+
+            // Normalize path
+            var normalized = path.Replace('\\', '/');
+            while (normalized.Contains("//")) normalized = normalized.Replace("//", "/");
+            if (normalized.StartsWith("./")) normalized = normalized.Substring(2);
+
+            // Prevent path traversal
+            if (normalized.Contains(".."))
+                return new { error = $"Path traversal not allowed: {path}" };
+
+            // Restrict to Assets/ or Packages/
+            if (!normalized.StartsWith("Assets/") && !normalized.StartsWith("Packages/") &&
+                normalized != "Assets" && normalized != "Packages")
+                return new { error = $"Path must start with Assets/ or Packages/: {path}" };
+
+            // Prevent deleting root folders
+            if (isDelete && (normalized == "Assets" || normalized == "Assets/" ||
+                            normalized == "Packages" || normalized == "Packages/"))
+                return new { error = "Cannot delete root Assets or Packages folder" };
+
+            return null;
+        }
     }
 
     /// <summary>
