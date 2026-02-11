@@ -744,6 +744,7 @@ namespace UnitySkills
                 {
                     job.StatusCode = 200;
                     job.ResponseJson = SkillRouter.Execute(skillName, job.Body);
+                    SkillsLogger.LogAgent(job.AgentId, skillName);
                 }
                 catch (Exception ex)
                 {
