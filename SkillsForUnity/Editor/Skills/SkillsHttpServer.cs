@@ -308,9 +308,9 @@ namespace UnitySkills
                 {
                     try
                     {
-                        string prefix = $"{_prefixBase}{preferredPort}/";
                         _listener = new HttpListener();
-                        _listener.Prefixes.Add(prefix);
+                        _listener.Prefixes.Add($"{_prefixBase}{preferredPort}/");
+                        _listener.Prefixes.Add($"http://127.0.0.1:{preferredPort}/");
                         _listener.Start();
 
                         _port = preferredPort;
@@ -330,9 +330,9 @@ namespace UnitySkills
                     {
                         try
                         {
-                            string prefix = $"{_prefixBase}{p}/";
                             _listener = new HttpListener();
-                            _listener.Prefixes.Add(prefix);
+                            _listener.Prefixes.Add($"{_prefixBase}{p}/");
+                            _listener.Prefixes.Add($"http://127.0.0.1:{p}/");
                             _listener.Start();
 
                             _port = p;
