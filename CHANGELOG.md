@@ -56,6 +56,19 @@ All notable changes to **UnitySkills** will be documented in this file.
 - **`script_create` 参数名兼容** — 同时支持 `scriptName` 和 `name` 参数，当两者都为空时返回明确错误而非生成 `.cs` 空文件名。`script_create_batch` 同步支持
 - **`light_add_probe_group` 增强** — 新增 `gridX/gridY/gridZ`（每轴探针数）和 `spacingX/spacingY/spacingZ`（间距）参数，支持一步创建网格布局的光照探针组；已有组件时支持重新设置探针位置
 
+#### Unity 6 兼容性修复（6 项）
+- **`console_set_collapse` / `console_set_clear_on_play` 修复** — Unity 6 移除了 `ConsoleWindow.s_ConsoleFlags` 静态字段，改为多级回退策略：`SetConsoleFlag` 方法 → `s_ConsoleFlags` 字段 → `LogEntries` API → `EditorPrefs` 兜底（`ConsoleSkills.cs`）
+- **`cinemachine_set_active` IComparable 修复** — CM3 的 `Priority` 属性不支持 LINQ `Max()` 泛型比较，改用 `foreach` 手动迭代并显式 `(int)` 转换（`CinemachineSkills.cs:538`）
+- **`audio_create_mixer` 创建失败修复** — Unity 6 中 `ScriptableObject.CreateInstance(AudioMixerController)` 触发 `ExtensionOfNativeClass` 异常导致返回失败，重构为优先使用 `CreateMixerControllerAtPath` 内部工厂方法 + `ScriptableObject.CreateInstance` 回退。注："Mixer is not initialized" 日志为 Unity 6 内部已知问题，Unity 自身菜单创建 AudioMixer 也会产生，不影响功能（`AudioSkills.cs:280`）
+- **`event_add_listener` 目标组件查找修复** — `GetComponent("GameObject")` 返回 null（GameObject 不是 Component），新增特殊处理：当 `targetComponentName` 为 `"GameObject"` 时直接使用 GO 作为目标 Object；同时增加 `set_XXX` 属性 setter 方法查找支持（`EventSkills.cs:90`）
+- **`smart_reference_bind` 字段查找修复** — 增加 Unity 序列化命名约定回退查找（`m_XXX`、`_xxx`）和 `PropertyInfo` 回退，修复 Unity 6 中部分组件字段名不匹配的问题（`SmartSkills.cs:159`）
+- **Splines 版本适配** — 新增 `SplinesVersionUnity6 = "2.8.3"` 常量和 `GetRecommendedSplinesVersion()` 方法，Unity 6 自动使用 2.8.3、Unity 2022 使用 2.8.0；CM3 安装依赖同步更新（`PackageManagerHelper.cs`）
+- **`component_set_enabled` Renderer/Collider 支持** — 原代码仅检查 `Behaviour` 类型，导致 `MeshRenderer`（继承 `Renderer`）和 `Collider` 等组件无法启用/禁用，新增 `Renderer` 和 `Collider` 类型分支（`ComponentSkills.cs:911`）
+- **`optimize_find_duplicate_materials` _Color 属性异常修复** — `mat.color` 直接访问 `_Color` 属性，TextMeshPro 等 shader 无此属性时抛出异常，改为 `HasProperty` 检查并回退到 `_BaseColor`（`OptimizationSkills.cs:237`）
+
+### Added
+- **`package_install_splines` 技能** — 新增 Splines 包版本化安装技能，自动检测 Unity 版本选择正确的 Splines 版本（Unity 6: 2.8.3, Unity 2022: 2.8.0），支持升级已安装的旧版本（`PackageSkills.cs`）
+
 ## [1.5.0] - 2026-02-13
 
 ### ⭐ Highlight

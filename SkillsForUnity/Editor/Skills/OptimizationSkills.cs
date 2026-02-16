@@ -234,7 +234,8 @@ namespace UnitySkills
                 var p = AssetDatabase.GUIDToAssetPath(guid);
                 var mat = AssetDatabase.LoadAssetAtPath<Material>(p);
                 if (mat == null || mat.shader == null) continue;
-                matInfos.Add((p, mat.shader.name + "|" + mat.color + "|" + mat.renderQueue));
+                var colorStr = mat.HasProperty("_Color") ? mat.color.ToString() : (mat.HasProperty("_BaseColor") ? mat.GetColor("_BaseColor").ToString() : "none");
+                matInfos.Add((p, mat.shader.name + "|" + colorStr + "|" + mat.renderQueue));
             }
 
             var duplicates = matInfos.GroupBy(m => m.key).Where(g => g.Count() > 1).Take(limit)

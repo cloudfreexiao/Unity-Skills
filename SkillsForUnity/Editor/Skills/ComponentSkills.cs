@@ -908,7 +908,7 @@ namespace UnitySkills
             return new { success = true, source = sourceObject, target = targetObject, componentType };
         }
 
-        [UnitySkill("component_set_enabled", "Enable or disable a Behaviour component")]
+        [UnitySkill("component_set_enabled", "Enable or disable a component (Behaviour, Renderer, Collider, etc.)")]
         public static object ComponentSetEnabled(string name = null, int instanceId = 0, string path = null, string componentType = null, bool enabled = true)
         {
             if (Validate.Required(componentType, "componentType") is object err) return err;
@@ -920,10 +920,13 @@ namespace UnitySkills
 
             var comp = go.GetComponent(type);
             if (comp == null) return new { error = $"No {componentType} on {go.name}" };
-            if (!(comp is Behaviour behaviour)) return new { error = $"{componentType} is not a Behaviour" };
 
-            Undo.RecordObject(behaviour, "Set Component Enabled");
-            behaviour.enabled = enabled;
+            Undo.RecordObject(comp, "Set Component Enabled");
+            if (comp is Behaviour behaviour) behaviour.enabled = enabled;
+            else if (comp is Renderer renderer) renderer.enabled = enabled;
+            else if (comp is Collider collider) collider.enabled = enabled;
+            else return new { error = $"{componentType} does not have an enabled property" };
+
             return new { success = true, gameObject = go.name, componentType, enabled };
         }
     }
