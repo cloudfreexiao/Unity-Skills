@@ -30,7 +30,9 @@ Create a prefab from a scene GameObject.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `gameObjectName` | string | No* | Source object name |
+| `name` | string | No* | Source object name |
+| `instanceId` | int | No* | Instance ID |
+| `path` | string | No* | Object path |
 | `instanceId` | int | No* | Instance ID |
 | `savePath` | string | Yes | Prefab save path |
 
@@ -70,7 +72,9 @@ Apply instance changes back to the prefab asset.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `gameObjectName` | string | No* | Prefab instance name |
+| `name` | string | No* | Prefab instance name |
+| `instanceId` | int | No* | Instance ID |
+| `path` | string | No* | Object path |
 | `instanceId` | int | No* | Instance ID |
 
 **Returns**: `{success, gameObject, prefabPath}`
@@ -80,7 +84,9 @@ Unpack a prefab instance (break prefab connection).
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
-| `gameObjectName` | string | No* | - | Prefab instance name |
+| `name` | string | No* | - | Prefab instance name |
+| `instanceId` | int | No* | - | Instance ID |
+| `path` | string | No* | - | Object path |
 | `instanceId` | int | No* | - | Instance ID |
 | `completely` | bool | No | false | Unpack all nested prefabs |
 

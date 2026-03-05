@@ -132,10 +132,10 @@ lightType: Directional, Point, Spot, Area | shadows: none, hard, soft
 ### prefab
 | Skill | Parameters |
 |-------|------------|
-| `prefab_create` | gameObjectName?, instanceId?, savePath |
+| `prefab_create` | name?, instanceId?, path?, savePath |
 | `prefab_instantiate` | prefabPath, x?, y?, z?, name?, parentName? |
-| `prefab_apply` | gameObjectName?, instanceId? |
-| `prefab_unpack` | gameObjectName?, instanceId?, completely? |
+| `prefab_apply` | name?, instanceId?, path? |
+| `prefab_unpack` | name?, instanceId?, path?, completely? |
 
 ### asset
 | Skill | Parameters |
@@ -184,7 +184,7 @@ template: MonoBehaviour, ScriptableObject, Editor, EditorWindow
 | `editor_play` | (none) |
 | `editor_stop` | (none) |
 | `editor_pause` | (none) |
-| `editor_select` | gameObjectName?, instanceId? |
+| `editor_select` | name?, instanceId?, path? |
 | `editor_get_selection` | (none) → selected objects with instanceId |
 | `editor_get_context` | includeComponents?, includeChildren? → selection, assets, scene info |
 | `editor_undo` | (none) |
@@ -277,7 +277,7 @@ animationType: None, Legacy, Generic, Humanoid | meshCompression: Off, Low, Medi
 ### camera
 | Skill | Parameters |
 |-------|------------|
-| `camera_align_view_to_object` | objectName |
+| `camera_align_view_to_object` | name?, instanceId?, path? |
 | `camera_get_info` | (none) |
 | `camera_set_transform` | posX, posY, posZ, rotX, rotY, rotZ, size?, instant? |
 | `camera_look_at` | x, y, z |
@@ -305,9 +305,9 @@ animationType: None, Legacy, Generic, Humanoid | meshCompression: Off, Low, Medi
 ### event
 | Skill | Parameters |
 |-------|------------|
-| `event_get_listeners` | objectName, componentName, eventName |
+| `event_get_listeners` | name?, instanceId?, path?, componentName?, eventName? |
 | `event_add_listener` | objectName, componentName, eventName, targetObjectName, ... |
-| `event_invoke` | objectName, componentName, eventName |
+| `event_invoke` | name?, instanceId?, path?, componentName?, eventName? |
 
 ### project
 | Skill | Parameters |

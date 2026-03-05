@@ -360,7 +360,7 @@ This file declares available skills for AI agents like Codex.
             sb.AppendLine("    # Create a cube");
             sb.AppendLine("    call_skill('gameobject_create', name='MyCube', primitiveType='Cube', x=0, y=1, z=0)");
             sb.AppendLine("    # Set its color to red");
-            sb.AppendLine("    call_skill('material_set_color', gameObjectName='MyCube', r=1, g=0, b=0)");
+            sb.AppendLine("    call_skill('material_set_color', name='MyCube', r=1, g=0, b=0)");
             sb.AppendLine("```");
             sb.AppendLine();
             sb.AppendLine("## ⚠️ Important: Script Creation & Domain Reload");
@@ -874,7 +874,7 @@ This file declares available skills for AI agents like Codex.
             sb.AppendLine("    return call_skill('gameobject_delete', name=name)");
             sb.AppendLine();
             sb.AppendLine("def set_color(game_object, r, g, b, a=1):");
-            sb.AppendLine("    return call_skill('material_set_color', gameObjectName=game_object, r=r, g=g, b=b, a=a)");
+            sb.AppendLine("    return call_skill('material_set_color', name=game_object, r=r, g=g, b=b, a=a)");
             sb.AppendLine();
             sb.AppendLine("def create_script(name, template='MonoBehaviour', wait_for_compile=True):");
             sb.AppendLine("    \"\"\"Create a C# script and optionally wait for Unity to recompile.\"\"\"");

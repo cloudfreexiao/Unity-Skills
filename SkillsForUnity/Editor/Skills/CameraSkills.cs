@@ -10,15 +10,15 @@ namespace UnitySkills
     public static class CameraSkills
     {
         [UnitySkill("camera_align_view_to_object", "Align Scene View camera to look at an object.")]
-        public static object CameraAlignViewToObject(string objectName)
+        public static object CameraAlignViewToObject(string name = null, int instanceId = 0, string path = null)
         {
-            var (go, findErr) = GameObjectFinder.FindOrError(name: objectName);
+            var (go, findErr) = GameObjectFinder.FindOrError(name: name, instanceId: instanceId, path: path);
             if (findErr != null) return findErr;
 
             if (SceneView.lastActiveSceneView != null)
             {
                 SceneView.lastActiveSceneView.AlignViewToObject(go.transform);
-                return new { success = true, message = $"Aligned view to {objectName}" };
+                return new { success = true, message = $"Aligned view to {go.name}" };
             }
             
             return new { error = "No active Scene View found" };

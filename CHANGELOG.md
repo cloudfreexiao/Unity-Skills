@@ -2,6 +2,11 @@
 
 All notable changes to **UnitySkills** will be documented in this file.
 
+## [Unreleased]
+
+### Changed
+- **API Consistency Upgrade**: Standardized parameter naming across `PrefabSkills`, `EditorSkills`, `EventSkills`, and `CameraSkills` for methods operating on single GameObjects. Replaced inconsistent names like `gameObjectName` and `objectName` with the standard signature `string name = null, int instanceId = 0, string path = null` to prevent AI hallucinations and parameter mismatch errors during tool execution.
+
 ## [1.5.4] - 2026-03-03
 
 ### Changed

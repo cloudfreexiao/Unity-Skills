@@ -11,11 +11,12 @@ namespace UnitySkills
     public static class PrefabSkills
     {
         [UnitySkill("prefab_create", "Create a prefab from a GameObject")]
-        public static object PrefabCreate(string gameObjectName, string savePath)
+        public static object PrefabCreate(string name = null, int instanceId = 0, string path = null, string savePath = null)
         {
+            if (Validate.Required(savePath, "savePath") is object reqErr) return reqErr;
             if (Validate.SafePath(savePath, "savePath") is object pathErr) return pathErr;
 
-            var (go, findErr) = GameObjectFinder.FindOrError(name: gameObjectName);
+            var (go, findErr) = GameObjectFinder.FindOrError(name: name, instanceId: instanceId, path: path);
             if (findErr != null) return findErr;
 
             var dir = Path.GetDirectoryName(savePath);
@@ -122,9 +123,9 @@ namespace UnitySkills
         }
 
         [UnitySkill("prefab_apply", "Apply all overrides from prefab instance to the source prefab asset. Equivalent to prefab_apply_overrides.")]
-        public static object PrefabApply(string gameObjectName)
+        public static object PrefabApply(string name = null, int instanceId = 0, string path = null)
         {
-            var (go, goErr) = GameObjectFinder.FindOrError(name: gameObjectName);
+            var (go, goErr) = GameObjectFinder.FindOrError(name: name, instanceId: instanceId, path: path);
             if (goErr != null) return goErr;
 
             var prefabRoot = PrefabUtility.GetOutermostPrefabInstanceRoot(go);
@@ -139,16 +140,16 @@ namespace UnitySkills
         }
 
         [UnitySkill("prefab_unpack", "Unpack a prefab instance. completely=false: unpack outermost root only; completely=true: fully unpack all nested prefabs.")]
-        public static object PrefabUnpack(string gameObjectName, bool completely = false)
+        public static object PrefabUnpack(string name = null, int instanceId = 0, string path = null, bool completely = false)
         {
-            var (go, findErr) = GameObjectFinder.FindOrError(name: gameObjectName);
+            var (go, findErr) = GameObjectFinder.FindOrError(name: name, instanceId: instanceId, path: path);
             if (findErr != null) return findErr;
 
             WorkflowManager.SnapshotObject(go);
             var mode = completely ? PrefabUnpackMode.Completely : PrefabUnpackMode.OutermostRoot;
             PrefabUtility.UnpackPrefabInstance(go, mode, InteractionMode.UserAction);
 
-            return new { success = true, unpacked = gameObjectName };
+            return new { success = true, unpacked = go.name };
         }
 
         [UnitySkill("prefab_get_overrides", "Get list of property overrides on a prefab instance")]

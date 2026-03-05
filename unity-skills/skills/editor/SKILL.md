@@ -43,7 +43,9 @@ Select a GameObject.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `gameObjectName` | string | No* | Object name |
+| `name` | string | No* | Object name |
+| `instanceId` | int | No* | Instance ID |
+| `path` | string | No* | Object path |
 | `instanceId` | int | No* | Instance ID |
 
 *One identifier required
@@ -131,7 +133,7 @@ for obj in context['selectedGameObjects']:
     print(f"Selected: {obj['name']} (ID: {obj['instanceId']})")
 
 # Select and operate on object
-unity_skills.call_skill("editor_select", gameObjectName="Player")
+unity_skills.call_skill("editor_select", name="Player")
 selection = unity_skills.call_skill("editor_get_selection")
 
 # Safe experimentation with undo

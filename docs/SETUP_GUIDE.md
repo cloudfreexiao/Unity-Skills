@@ -141,7 +141,7 @@ curl -X POST http://localhost:8090/skill/gameobject_create \
 #### 设置颜色
 ```bash
 curl -X POST http://localhost:8090/skill/material_set_color \
-  -d '{"gameObjectName":"MyCube","r":1,"g":0,"b":0}'
+  -d '{"name":"MyCube","r":1,"g":0,"b":0}'
 ```
 
 #### 保存场景
@@ -164,7 +164,7 @@ def call_skill(name, **kwargs):
 
 # 使用
 call_skill("gameobject_create", name="Cube", primitiveType="Cube", x=0, y=1, z=0)
-call_skill("material_set_color", gameObjectName="Cube", r=1, g=0, b=0)
+call_skill("material_set_color", name="Cube", r=1, g=0, b=0)
 call_skill("editor_play")
 ```
 
@@ -198,24 +198,24 @@ call_skill("editor_play")
 ### Component (组件) - 8 skills (含批量)
 | Skill | 描述 | 参数 |
 |-------|------|------|
-| component_add | 添加组件 | gameObjectName, componentType |
+| component_add | 添加组件 | name, componentType |
 | component_add_batch | **批量添加** | items (JSON数组) |
-| component_remove | 移除组件 | gameObjectName, componentType |
+| component_remove | 移除组件 | name, componentType |
 | component_remove_batch | **批量移除** | items (JSON数组) |
-| component_list | 列出组件 | gameObjectName |
-| component_set_property | 设置属性 | gameObjectName, componentType, propertyName, value |
+| component_list | 列出组件 | name |
+| component_set_property | 设置属性 | name, componentType, propertyName, value |
 | component_set_property_batch | **批量设置属性** | items (JSON数组) |
-| component_get_properties | 获取属性 | gameObjectName, componentType |
+| component_get_properties | 获取属性 | name, componentType |
 
 ### Material (材质) - 17 skills
 | Skill | 描述 | 参数 |
 |-------|------|------|
 | material_create | 创建材质 | name, shaderName, savePath |
-| material_set_color | 设置颜色 | gameObjectName, r, g, b, a, propertyName, intensity |
-| material_set_emission | 设置发光 | gameObjectName, r, g, b, intensity |
-| material_set_texture | 设置贴图 | gameObjectName, texturePath, propertyName |
-| material_assign | 分配材质 | gameObjectName, materialPath |
-| material_set_float | 设置浮点值 | gameObjectName, propertyName, value |
+| material_set_color | 设置颜色 | name, r, g, b, a, propertyName, intensity |
+| material_set_emission | 设置发光 | name, r, g, b, intensity |
+| material_set_texture | 设置贴图 | name, texturePath, propertyName |
+| material_assign | 分配材质 | name, materialPath |
+| material_set_float | 设置浮点值 | name, propertyName, value |
 
 ### Light (灯光) - 7 skills (含批量)
 | Skill | 描述 | 参数 |
@@ -234,7 +234,7 @@ call_skill("editor_play")
 | editor_play | 进入播放模式 | - |
 | editor_stop | 停止播放模式 | - |
 | editor_pause | 暂停/继续 | - |
-| editor_select | 选中物体 | gameObjectName, instanceId |
+| editor_select | 选中物体 | name, instanceId |
 | editor_get_selection | 获取选中 | - |
 | **editor_get_context** | **获取完整上下文** | includeComponents, includeChildren |
 | editor_undo | 撤销 | - |
@@ -272,11 +272,11 @@ call_skill("editor_play")
 ### Prefab (预制体) - 5 skills
 | Skill | 描述 | 参数 |
 |-------|------|------|
-| prefab_create | 创建预制体 | gameObjectName, savePath |
+| prefab_create | 创建预制体 | name, savePath |
 | prefab_instantiate | 实例化预制体 | prefabPath, x, y, z, name |
 | prefab_instantiate_batch | **批量实例化** | items (JSON数组) |
-| prefab_apply | 应用修改 | gameObjectName |
-| prefab_unpack | 解包预制体 | gameObjectName, completely |
+| prefab_apply | 应用修改 | name |
+| prefab_unpack | 解包预制体 | name, completely |
 
 ### Console (控制台) - 5 skills
 | Skill | 描述 | 参数 |
@@ -327,5 +327,5 @@ import requests
 requests.post("http://localhost:8090/skill/gameobject_create", 
     json={"name":"RedCube","primitiveType":"Cube","x":0,"y":1,"z":0})
 requests.post("http://localhost:8090/skill/material_set_color",
-    json={"gameObjectName":"RedCube","r":1,"g":0,"b":0})
+    json={"name":"RedCube","r":1,"g":0,"b":0})
 ```

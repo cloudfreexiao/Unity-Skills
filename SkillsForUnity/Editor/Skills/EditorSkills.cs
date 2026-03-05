@@ -38,9 +38,9 @@ namespace UnitySkills
         }
 
         [UnitySkill("editor_select", "Select a GameObject")]
-        public static object EditorSelect(string gameObjectName = null, int instanceId = 0)
+        public static object EditorSelect(string name = null, int instanceId = 0, string path = null)
         {
-            var (go, findErr) = GameObjectFinder.FindOrError(name: gameObjectName, instanceId: instanceId);
+            var (go, findErr) = GameObjectFinder.FindOrError(name: name, instanceId: instanceId, path: path);
             if (findErr != null) return findErr;
 
             Selection.activeGameObject = go;
