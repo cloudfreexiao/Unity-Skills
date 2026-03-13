@@ -148,7 +148,6 @@ namespace UnitySkills
                     modifier(registry);
 
                     // Write to .tmp file first for atomic replacement
-                    var tmpFile = RegistryFile + ".tmp";
                     var newJson = JsonConvert.SerializeObject(registry, Formatting.Indented);
                     File.WriteAllText(tmpFile, newJson, Encoding.UTF8);
 
