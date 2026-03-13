@@ -58,6 +58,9 @@ namespace UnitySkills
         // Configurable interval for unconditional main-thread wakeup.
         private const string PrefKeyKeepAliveInterval = "UnitySkills_KeepAliveIntervalSeconds";
 
+        // Thread-safe cached value for KeepAliveIntervalSeconds (EditorPrefs is main-thread only)
+        private static long _cachedKeepAliveIntervalTicks = 10L * TimeSpan.TicksPerSecond;
+
         /// <summary>
         /// How often (seconds) the keep-alive thread forces a main-thread wakeup,
         /// even when there are no pending jobs. Keeps watchdog and heartbeat alive
@@ -66,7 +69,11 @@ namespace UnitySkills
         public static int KeepAliveIntervalSeconds
         {
             get => Mathf.Max(1, EditorPrefs.GetInt(PrefKeyKeepAliveInterval, 10));
-            set => EditorPrefs.SetInt(PrefKeyKeepAliveInterval, Mathf.Max(1, value));
+            set
+            {
+                EditorPrefs.SetInt(PrefKeyKeepAliveInterval, Mathf.Max(1, value));
+                _cachedKeepAliveIntervalTicks = (long)Mathf.Max(1, value) * TimeSpan.TicksPerSecond;
+            }
         }
         // Request processing timeout - cached for thread safety (EditorPrefs is main-thread only)
         private static int _cachedTimeoutMs = 15 * 60 * 1000;
@@ -511,6 +518,8 @@ namespace UnitySkills
             {
                 HookUpdateLoop();
                 RefreshTimeoutCache();
+                // Cache keep-alive interval for thread-safe access from KeepAliveLoop
+                _cachedKeepAliveIntervalTicks = (long)KeepAliveIntervalSeconds * TimeSpan.TicksPerSecond;
 
                 // Port Hunting: 8090 -> 8100
                 int startPort = 8090;
@@ -594,8 +603,15 @@ namespace UnitySkills
                 SkillsLogger.Log($"{skillCount} skills loaded | Instance: {RegistryService.InstanceId}");
                 SkillsLogger.LogVerbose($"Domain Reload Recovery: ENABLED (AutoStart={AutoStart})");
 
-                // Self-test: verify reachability after Start() returns
-                EditorApplication.delayCall += RunSelfTest;
+                // Initialize heartbeat timer so the first heartbeat doesn't fire immediately during startup
+                _lastHeartbeatTime = EditorApplication.timeSinceStartup;
+                _lastWatchdogCheck = EditorApplication.timeSinceStartup;
+
+                // Force an immediate update so ProcessJobQueue starts processing as soon as possible
+                EditorApplication.QueuePlayerLoopUpdate();
+
+                // Self-test: verify reachability after a short delay to let the update loop stabilize
+                ScheduleDelayedCall(1.5, RunSelfTest);
             }
             catch (Exception ex)
             {
@@ -682,7 +698,7 @@ namespace UnitySkills
                     {
                         // No pending jobs: still wake up periodically so watchdog and heartbeat can run
                         long nowTicks = DateTime.UtcNow.Ticks;
-                        long intervalTicks = (long)KeepAliveIntervalSeconds * TimeSpan.TicksPerSecond;
+                        long intervalTicks = _cachedKeepAliveIntervalTicks;
                         if (nowTicks - _lastForceWakeTicks > intervalTicks)
                         {
                             _lastForceWakeTicks = nowTicks;
@@ -1082,6 +1098,9 @@ namespace UnitySkills
             int port = _port;
             ThreadPool.QueueUserWorkItem(_ =>
             {
+                // Brief pause to let the KeepAlive thread and update loop fully stabilize
+                Thread.Sleep(500);
+
                 // 1. Reachability test
                 var hosts = new[] { "localhost", "127.0.0.1" };
                 foreach (var host in hosts)
@@ -1090,7 +1109,8 @@ namespace UnitySkills
                     try
                     {
                         var req = (HttpWebRequest)WebRequest.Create(url);
-                        req.Timeout = 3000;
+                        req.Timeout = 8000;
+                        req.Proxy = null; // Bypass system proxy — 127.0.0.1 is often not in proxy bypass list on Windows
                         using (var resp = (HttpWebResponse)req.GetResponse())
                         {
                             if (resp.StatusCode == HttpStatusCode.OK)
@@ -1115,6 +1135,7 @@ namespace UnitySkills
                     {
                         var req = (HttpWebRequest)WebRequest.Create($"http://127.0.0.1:{p}/");
                         req.Timeout = 500;
+                        req.Proxy = null;
                         using (req.GetResponse()) { }
                         occupied.Add(p.ToString());
                     }
