@@ -122,9 +122,15 @@ namespace UnitySkills
             ["SnapTurnProvider"] = new[] {
                 "UnityEngine.XR.Interaction.Toolkit.Locomotion.Turning.SnapTurnProvider",
                 "UnityEngine.XR.Interaction.Toolkit.SnapTurnProvider" },
+            ["ActionBasedSnapTurnProvider"] = new[] {
+                "UnityEngine.XR.Interaction.Toolkit.Locomotion.Turning.ActionBasedSnapTurnProvider",
+                "UnityEngine.XR.Interaction.Toolkit.ActionBasedSnapTurnProvider" },
             ["ContinuousTurnProvider"] = new[] {
                 "UnityEngine.XR.Interaction.Toolkit.Locomotion.Turning.ContinuousTurnProvider",
                 "UnityEngine.XR.Interaction.Toolkit.ContinuousTurnProvider" },
+            ["ActionBasedContinuousTurnProvider"] = new[] {
+                "UnityEngine.XR.Interaction.Toolkit.Locomotion.Turning.ActionBasedContinuousTurnProvider",
+                "UnityEngine.XR.Interaction.Toolkit.ActionBasedContinuousTurnProvider" },
 
             // Locomotion - System/Mediator
             ["LocomotionSystem"] = new[] {
@@ -165,12 +171,14 @@ namespace UnitySkills
 
         /// <summary>
         /// Find a type by full name across all loaded assemblies.
+        /// Uses asm.GetType() first, then falls back to full assembly scan.
         /// </summary>
         public static Type FindTypeInAssemblies(string fullName)
         {
             if (string.IsNullOrEmpty(fullName)) return null;
             if (_typeCache.TryGetValue(fullName, out var cached)) return cached;
 
+            // Pass 1: Fast path — asm.GetType(fullName)
             foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
             {
                 try
@@ -180,6 +188,24 @@ namespace UnitySkills
                     {
                         _typeCache[fullName] = t;
                         return t;
+                    }
+                }
+                catch { /* ignore assemblies that fail to enumerate */ }
+            }
+
+            // Pass 2: Fallback — full scan with GetTypes() (handles assembly forwarding/loading edge cases)
+            var shortName = fullName.Contains(".") ? fullName.Substring(fullName.LastIndexOf('.') + 1) : fullName;
+            foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
+            {
+                try
+                {
+                    foreach (var t in asm.GetTypes())
+                    {
+                        if (t.FullName == fullName)
+                        {
+                            _typeCache[fullName] = t;
+                            return t;
+                        }
                     }
                 }
                 catch { /* ignore assemblies that fail to enumerate */ }
@@ -213,10 +239,10 @@ namespace UnitySkills
                 }
             }
 
-            // Fallback: try direct search as full name
-            var direct = FindTypeInAssemblies(shortName);
-            _typeCache[cacheKey] = direct;
-            return direct;
+            // Fallback: try ComponentSkills.FindComponentType which uses a broader search strategy
+            var fallback = ComponentSkills.FindComponentType(shortName);
+            _typeCache[cacheKey] = fallback;
+            return fallback;
         }
 
         // ==================================================================================
@@ -226,11 +252,18 @@ namespace UnitySkills
         /// <summary>
         /// Add an XR component to a GameObject using reflection.
         /// Returns the added component, or null on failure.
+        /// Uses ResolveXRType first, then falls back to ComponentSkills.FindComponentType.
         /// </summary>
         public static Component AddXRComponent(GameObject go, string typeName)
         {
             if (go == null) return null;
+
             var type = ResolveXRType(typeName);
+
+            // Ultimate fallback: ComponentSkills uses a broader search strategy (all types in all assemblies)
+            if (type == null)
+                type = ComponentSkills.FindComponentType(typeName);
+
             if (type == null) return null;
 
             // Check if component already exists
@@ -246,7 +279,7 @@ namespace UnitySkills
         public static Component GetXRComponent(GameObject go, string typeName)
         {
             if (go == null) return null;
-            var type = ResolveXRType(typeName);
+            var type = ResolveXRType(typeName) ?? ComponentSkills.FindComponentType(typeName);
             if (type == null) return null;
             return go.GetComponent(type);
         }

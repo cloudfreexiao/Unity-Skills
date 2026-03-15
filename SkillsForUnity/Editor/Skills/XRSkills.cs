@@ -1114,13 +1114,15 @@ namespace UnitySkills
 
             if (isSnap)
             {
-                comp = XRReflectionHelper.AddXRComponent(go, "SnapTurnProvider");
+                comp = XRReflectionHelper.AddXRComponent(go, "ActionBasedSnapTurnProvider")
+                    ?? XRReflectionHelper.AddXRComponent(go, "SnapTurnProvider");
                 if (comp != null)
                     XRReflectionHelper.SetProperty(comp, "turnAmount", turnAmount);
             }
             else
             {
-                comp = XRReflectionHelper.AddXRComponent(go, "ContinuousTurnProvider");
+                comp = XRReflectionHelper.AddXRComponent(go, "ActionBasedContinuousTurnProvider")
+                    ?? XRReflectionHelper.AddXRComponent(go, "ContinuousTurnProvider");
                 if (comp != null)
                     XRReflectionHelper.SetProperty(comp, "turnSpeed", turnSpeed);
             }
