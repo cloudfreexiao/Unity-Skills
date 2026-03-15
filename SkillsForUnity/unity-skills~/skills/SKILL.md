@@ -31,6 +31,7 @@ This folder contains detailed documentation for each skill module. For quick ref
 | [importer](./importer/SKILL.md) | Texture/Audio/Model import settings | Yes (3 batch skills) |
 | [cinemachine](./cinemachine/SKILL.md) | Virtual cameras and cinematics | No |
 | [probuilder](./probuilder/SKILL.md) | ProBuilder mesh modeling (requires package) | No |
+| [xr](./xr/SKILL.md) | XR Interaction Toolkit (requires package, reflection-based) | No |
 | [terrain](./terrain/SKILL.md) | Terrain creation and painting | No |
 | [physics](./physics/SKILL.md) | Raycasts, overlaps, gravity | No |
 | [navmesh](./navmesh/SKILL.md) | Navigation mesh baking | No |
@@ -71,6 +72,7 @@ These modules provide architecture and coding guidance. They are optional and sh
 | [async](./async/SKILL.md) | Async and lifecycle strategy | When choosing between `Update`, coroutine, UniTask, timers, cleanup |
 | [inspector](./inspector/SKILL.md) | Inspector-facing API and serialization guidance | When designing fields, attributes, validation, authoring UX |
 | [scriptdesign](./scriptdesign/SKILL.md) | Script-level quality review | When generating or reviewing scripts for coupling/performance/maintainability |
+| [xr](./xr/SKILL.md) | XR development workflow guidance | When setting up VR/AR interactions, teleportation, grab, or XR rig |
 
 ## Batch-First Rule
 
@@ -91,7 +93,7 @@ unity_skills.call_skill("gameobject_create_batch",
 
 ## Coverage Summary
 
-- Unity REST skills: 490
-- Advisory design modules: 13
-- Core runtime modules: 37
-- Total documented module folders: 50
+- Unity REST skills: 512
+- Advisory design modules: 14
+- Core runtime modules: 38
+- Total documented module folders: 52

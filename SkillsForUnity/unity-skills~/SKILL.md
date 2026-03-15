@@ -9,8 +9,8 @@ Use this skill when the user wants to automate the Unity Editor through the loca
 
 Current package snapshot:
 
-- `490` REST skills
-- `13` advisory design modules
+- `512` REST skills
+- `14` advisory design modules
 - Unity maintenance baseline: `2022.3+`
 - Default request timeout: `15 minutes`
 
@@ -71,7 +71,7 @@ if result.get("success"):
 
 ## Advisory Design Modules
 
-These modules are optional. Load them when the user asks for architecture guidance, script design advice, refactoring direction, coupling reduction, performance review, or maintainability tradeoffs.
+These modules are optional. Load them when the user asks for architecture guidance, script design advice, refactoring direction, coupling reduction, performance review, maintainability tradeoffs, or XR/VR/AR development (grab interactions, teleportation, controller setup).
 
 - `skills/project-scout/SKILL.md`
 - `skills/architecture/SKILL.md`
@@ -86,8 +86,11 @@ These modules are optional. Load them when the user asks for architecture guidan
 - `skills/async/SKILL.md`
 - `skills/inspector/SKILL.md`
 - `skills/scriptdesign/SKILL.md`
+- `skills/xr/SKILL.md`
 
 Use them on demand. Do not default to giant architecture dumps, forced UniTask adoption, or a global event bus unless the project context clearly justifies it.
+
+> **XR/VR rule**: Before calling any `xr_*` skill for the first time in a session, **always load `skills/xr/SKILL.md` first**. It contains verified API property names, Collider configuration rules, and anti-hallucination guardrails that prevent common setup errors. Skipping this step risks silent configuration failures.
 
 ## Module Index
 

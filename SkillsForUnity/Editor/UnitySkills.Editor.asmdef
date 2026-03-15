@@ -37,6 +37,16 @@
             "name": "com.unity.probuilder",
             "expression": "[5.0,7.0)",
             "define": "PROBUILDER"
+        },
+        {
+            "name": "com.unity.xr.interaction.toolkit",
+            "expression": "[2.0,4.0)",
+            "define": "XRI"
+        },
+        {
+            "name": "com.unity.xr.core-utils",
+            "expression": "[2.0,4.0)",
+            "define": "XR_CORE_UTILS"
         }
     ],
     "noEngineReferences": false

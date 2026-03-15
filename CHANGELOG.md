@@ -2,6 +2,24 @@
 
 All notable changes to **UnitySkills** will be documented in this file.
 
+## [1.6.4] - 2026-03-15
+
+### Added
+- **XRSkills (22 skills)**：新增 `XRSkills.cs` XR Interaction Toolkit 技能模块 + `XRReflectionHelper.cs` 反射辅助类，通过纯反射实现 XRI 2.x（Unity 2022）/ 3.x（Unity 6）跨版本兼容，无需编译期依赖 XRI 程序集。包含：
+  - **Setup & Validation (5 skills)**：`xr_check_setup`（全面检查 XR 项目配置）、`xr_setup_rig`（创建完整 XR Origin Rig 含 Camera/Left/Right Controller 层级）、`xr_setup_interaction_manager`（添加 XRInteractionManager）、`xr_setup_event_system`（替换 StandaloneInputModule 为 XRUIInputModule）、`xr_get_scene_report`（XR 场景诊断报告）
+  - **Interactor Skills (4 skills)**：`xr_add_ray_interactor`（射线交互器 + LineRenderer）、`xr_add_direct_interactor`（近距离抓取 + SphereCollider trigger）、`xr_add_socket_interactor`（插座交互器）、`xr_list_interactors`（列出所有交互器）
+  - **Interactable Skills (4 skills)**：`xr_add_grab_interactable`（可抓取物体 + Rigidbody + Collider + movementType 配置）、`xr_add_simple_interactable`（简单交互）、`xr_configure_interactable`（配置交互属性）、`xr_list_interactables`（列出所有交互物体）
+  - **Locomotion Skills (5 skills)**：`xr_setup_teleportation`（传送提供者）、`xr_add_teleport_area`（传送区域）、`xr_add_teleport_anchor`（传送锚点 + 可视化指示器）、`xr_setup_continuous_move`（连续移动）、`xr_setup_turn_provider`（Snap/Continuous 转向）
+  - **Advanced Skills (4 skills)**：`xr_setup_ui_canvas`（Canvas XR 兼容化 + TrackedDeviceGraphicRaycaster）、`xr_configure_haptics`（触觉反馈）、`xr_add_interaction_event`（交互事件绑定）、`xr_configure_interaction_layers`（交互层配置）
+- **XR Advisory 模块**：新增 `skills/xr/SKILL.md` 文档，包含 6 个 XR 开发工作流指南（Rig 搭建、抓取交互、传送系统、连续移动、XR UI、交互事件与反馈）、组件依赖关系图、movementType 选择指南、版本兼容性说明。
+- **XRReflectionHelper 反射辅助**：25+ XR 类型的版本映射表（XRI 3.x 子命名空间 → 2.x 根命名空间 fallback），缓存类型解析，版本自动检测（通过命名空间探测区分 2.x/3.x）。
+
+### Changed
+- **asmdef versionDefines 扩展**：`UnitySkills.Editor.asmdef` 新增 `XRI`（`com.unity.xr.interaction.toolkit [2.0,4.0)`）和 `XR_CORE_UTILS`（`com.unity.xr.core-utils [2.0,4.0)`）条件编译符号。不添加 XRI 程序集引用（纯反射）。
+- **REST Skills 总数**：490 → 512（+22 XR skills）。
+- **Skills 文件数**：39 → 40 个 `*Skills.cs` 文件。
+- **Advisory 模块数**：13 → 14（+1 XR advisory）。
+
 ## [1.6.3] - 2026-03-14
 
 ### Added
