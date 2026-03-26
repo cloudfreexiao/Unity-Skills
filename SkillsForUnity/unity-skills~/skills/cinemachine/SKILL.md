@@ -5,7 +5,7 @@ description: "Cinemachine virtual camera control. Use when users want to create 
 
 # Cinemachine Skills
 
-Control Cinemachine Virtual Cameras and settings (Cinemachine 3.x).
+Control Cinemachine Virtual Cameras and settings (Cinemachine 2.x / 3.x).
 
 ## Guardrails
 
@@ -16,6 +16,10 @@ Control Cinemachine Virtual Cameras and settings (Cinemachine 3.x).
 - `cinemachine_set_target` does not exist → use `cinemachine_set_follow` and `cinemachine_set_lookat` separately
 - `cinemachine_add_brain` does not exist → CinemachineBrain is auto-added to Main Camera
 - Cinemachine 2.x uses `CinemachineVirtualCamera`; Cinemachine 3.x uses `CinemachineCamera` — skills handle this automatically
+
+Additional compatibility notes:
+- CM3 priority access should use `Priority.Value` as the lowest common API when writing compatibility code.
+- Early CM3 previews before `3.0.0-pre.5` changed core camera APIs significantly and are outside the current support baseline.
 
 **Routing**:
 - For basic Game Camera operations → use `camera` module

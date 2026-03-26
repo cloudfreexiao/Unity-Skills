@@ -2,6 +2,17 @@
 
 All notable changes to **UnitySkills** will be documented in this file.
 
+## [1.6.6] - 2026-03-26
+
+### Fixed
+- **CM3 `PrioritySettings` 编译兼容修复** — `CinemachineSkills.cs` 不再依赖 `PrioritySettings` 的隐式 `int` 转换；`cinemachine_create_vcam` 和 `cinemachine_set_active` 统一改为使用 `Priority.Value` 这一最低公共 API，修复 Unity 2022.3 项目在安装部分 `Cinemachine 3.0.x` 预览版本时出现的 `CS0029` / `CS0030` 编译错误。
+- **`cinemachine_set_active` 返回值修正** — CM3 分支返回消息现在输出实际优先级数值，而不是 `PrioritySettings` 结构体对象文本。
+
+### Changed
+- **CM3 支持边界说明** — 文档明确当前 `Cinemachine 3` 兼容策略以 `3.0.0-pre.5+ / stable 3.x` 的共同 API 为基线；更早的 `3.0.0-pre.1/.2` 因核心相机 API 仍在演化，不纳入当前兼容范围。
+- **Package Manager 元数据补全** — `SkillsForUnity/package.json` 新增 `changelogUrl`，Unity Package Manager 的 `Changelog` 按钮现在会跳转到仓库中的 `CHANGELOG.md`。
+- **版本号更新** — `SkillsLogger.Version`、`package.json`、Python helper 和安装文档同步提升到 `1.6.6`。
+
 ## [1.6.5] - 2026-03-20
 
 ### Added

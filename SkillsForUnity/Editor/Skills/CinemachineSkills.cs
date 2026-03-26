@@ -33,7 +33,7 @@ namespace UnitySkills
 #if CINEMACHINE_3
             var go = new GameObject(name);
             var vcam = go.AddComponent<CinemachineCamera>();
-            vcam.Priority = 10;
+            vcam.Priority.Value = 10;
 #elif CINEMACHINE_2
             var go = new GameObject(name);
             var vcam = go.AddComponent<CinemachineVirtualCamera>();
@@ -535,12 +535,12 @@ namespace UnitySkills
 
             var allCams = FindAllObjects<CinemachineCamera>();
             int maxPrio = 0;
-            foreach (var c in allCams) { int p = (int)c.Priority; if (p > maxPrio) maxPrio = p; }
+            foreach (var c in allCams) { int p = c.Priority.Value; if (p > maxPrio) maxPrio = p; }
 
-            vcam.Priority = maxPrio + 1;
+            vcam.Priority.Value = maxPrio + 1;
             EditorUtility.SetDirty(vcam);
 
-            return new { success = true, message = "Set Priority to " + vcam.Priority + " (Highest)" };
+            return new { success = true, message = "Set Priority to " + vcam.Priority.Value + " (Highest)" };
 #elif CINEMACHINE_2
             var vcam = go.GetComponent<CinemachineVirtualCamera>();
             if (vcam == null) return new { error = "Not a CinemachineVirtualCamera" };

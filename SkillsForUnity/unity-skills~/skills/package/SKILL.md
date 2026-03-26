@@ -66,6 +66,10 @@ Unity Package Manager 操作，支持包的安装、移除和 Cinemachine 自动
 **Parameters:**
 - `version` (int, optional): 2 或 3，默认 3。CM3 自动安装 Splines 依赖。
 
+**Notes:**
+- UnitySkills startup auto-install uses CM2 on Unity 2022 and CM3 on Unity 6.
+- If you explicitly install CM3 in Unity 2022, prefer stable `3.0.1+ / 3.1.x`. Early `3.0.0-pre.1/.2` previews used different core camera APIs and are outside the current support baseline.
+
 ### `package_get_cinemachine_status`
 获取 Cinemachine 安装状态。
 **Parameters:** None.
