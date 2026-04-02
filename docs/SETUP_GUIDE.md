@@ -36,7 +36,7 @@ https://github.com/Besty0728/Unity-Skills.git?path=/SkillsForUnity#beta
 指定版本：
 
 ```text
-https://github.com/Besty0728/Unity-Skills.git?path=/SkillsForUnity#v1.6.6
+https://github.com/Besty0728/Unity-Skills.git?path=/SkillsForUnity#v1.6.7
 ```
 
 ## 启动服务

@@ -2,6 +2,20 @@
 
 All notable changes to **UnitySkills** will be documented in this file.
 
+## [1.6.7] - 2026-04-02
+
+### Added
+- **Intent-Level Skill Metadata (v1.7 Attributes)** — 全部 513 个 Skill 的 `[UnitySkill]` 特性新增 6 个结构化元数据字段：`Category`（SkillCategory 枚举）、`Operation`（SkillOperation Flags 枚举: Query/Create/Modify/Delete/Execute/Analyze）、`Tags`（语义标签数组）、`Outputs`（返回字段声明）、`RequiresInput`（前置依赖声明）、`ReadOnly`（纯查询标记）。
+- **`/skills` 过滤查询 API** — GET `/skills` 端点支持 query string 过滤：`category`、`operation`、`tags`、`readOnly`、`q`（文本搜索 name+description+tags），多条件 AND 组合。无参数调用完全向后兼容。
+- **`/skills/recommend` 意图推荐端点** — 新增 GET `/skills/recommend?intent=create+cube&topN=10`，基于关键词评分排序（name=3分, tags=2分, description=1分），返回 top-N 匹配 Skill 及 relevance score。
+- **Metadata Validation 工具** — 编辑器 Skills 标签页新增 **Validate** 按钮，检查 6 条元数据规则（Category/Operation/Tags/Outputs 完整性、ReadOnly 与 TracksWorkflow 矛盾检测、Delete/Modify 操作的 RequiresInput 检查），结果输出到 Console。
+- **Python 客户端增强** — `get_skills()` 新增 `category`/`operation`/`tags`/`read_only`/`q` 过滤参数；新增 `find_skills(intent, top_n)` 调用服务端推荐；新增 `get_skill_chain(target_output)` 查找产出特定字段的 Skill 链。
+
+### Changed
+- **SkillsHttpServer QueryString 管道** — `RequestJob` 新增 `QueryString` 字段，HTTP 请求的查询字符串从 `ListenLoop` 完整传递到 `ProcessJob`，支撑过滤和推荐端点。
+- **SkillRouter Manifest 增强** — `/skills` manifest 新增 `categories` 和 `operationTypes` 顶层字段；每个 Skill 条目新增 `category`、`operation`、`tags`、`outputs`、`requiresInput`、`readOnly` 字段。
+- **版本号更新** — `SkillsLogger.Version`、`package.json`、Python helper 和文档同步提升到 `1.6.7`。
+
 ## [1.6.6] - 2026-03-26
 
 ### Fixed
