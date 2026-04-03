@@ -2,6 +2,22 @@
 
 All notable changes to **UnitySkills** will be documented in this file.
 
+## [1.6.9] - 2026-04-03
+
+### Added
+- **依赖链查询端点 `/skills/chain`** — 新增 GET `/skills/chain?output=instanceId` 端点，基于 `Outputs` 元数据构建的反向索引，快速查找能产出指定字段的 Skill 链，支持 AI Agent 自动编排多步工作流。
+- **Dry-Run 模式** — POST `/skill/{name}?dryRun=true` 仅验证参数合法性而不实际执行技能，返回参数解析结果和缺失必选参数提示，便于 Agent 预检查调用可行性。
+- **意图解析增强** — `SkillRouter` 新增中英文同义词映射表（70+ 条目）、操作类型提取（Create/Delete/Query/Modify/Execute/Analyze）和分类关键词匹配，`/skills/recommend` 端点支持中文子串匹配（如"创建方块"直接匹配到 `gameobject_create`）。
+- **输出索引** — `SkillRouter` 初始化时构建 `output field → producing skills` 反向索引，支撑依赖链查询和意图推荐的输出字段匹配。
+
+### Fixed
+- **Domain Reload 后服务器偶发不重启** — 新增 `ProcessJobQueue` 安全网机制：每 5 秒检测服务器是否应运行但未运行，自动触发恢复，不再完全依赖 `EditorApplication.delayCall`（该 API 在某些 Unity 版本/状态下可能不触发）。同时将端口释放等待从 500ms 增加到 2000ms，`delayCall` 恢复增加 1 秒延迟缓冲端口释放。
+- **连续失败计数过于激进** — `MaxConsecutiveFailures` 从 5 提升到 10；新增 5 分钟时间衰减机制，距上次失败超过 5 分钟自动重置计数器，防止历史失败累积导致服务器永久放弃自动重启。
+- **必选参数判定优化** — `SkillRouter` 新增 `IsParameterRequired()` 方法替代简单的 `!p.HasDefaultValue` 判断，正确处理值类型可空参数的必选性识别。
+
+### Changed
+- **版本号更新** — `SkillsLogger.Version`、`package.json`、Python helper 和文档同步提升到 `1.6.9`。
+
 ## [1.6.8] - 2026-04-03
 
 ### Fixed

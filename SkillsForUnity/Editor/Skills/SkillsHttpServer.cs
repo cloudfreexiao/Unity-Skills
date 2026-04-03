@@ -89,6 +89,10 @@ namespace UnitySkills
         private const double WatchdogInterval = 15.0;
         private static double _lastWatchdogCheck = 0;
 
+        // Safety net: recover server after Domain Reload if delayCall failed to fire
+        private const double SafetyNetInterval = 5.0;
+        private static double _lastSafetyNetCheck = 0;
+
         // KeepAlive: unconditional wakeup interval (ticks; 5s = 50_000_000 ticks)
         private static long _lastForceWakeTicks = 0;
 
@@ -113,7 +117,7 @@ namespace UnitySkills
         private static string PREF_TOTAL_PROCESSED => PrefKey("TotalProcessed");
         private static string PREF_LAST_PORT => PrefKey("LastPort");
         private static string PREF_CONSECUTIVE_FAILURES => PrefKey("ConsecutiveRestartFailures");
-        private const int MaxConsecutiveFailures = 5;
+        private const int MaxConsecutiveFailures = 10;
 
         // Domain Reload tracking
         private static bool _domainReloadPending = false;
@@ -376,7 +380,7 @@ namespace UnitySkills
             
             // Check if we should auto-restart after Domain Reload
             // Use delayed call to ensure Unity is fully initialized
-            EditorApplication.delayCall += CheckAndRestoreServer;
+            EditorApplication.delayCall += () => ScheduleDelayedCall(1.0, CheckAndRestoreServer);
         }
         
         /// <summary>
@@ -406,7 +410,7 @@ namespace UnitySkills
                 try { _listener?.Stop(); } catch { }
                 try { _listener?.Close(); } catch { }
                 // Wait for threads to exit so port is fully released
-                try { _listenerThread?.Join(500); } catch { }
+                try { _listenerThread?.Join(2000); } catch { }
                 try { _keepAliveThread?.Join(100); } catch { }
             }
         }
@@ -467,6 +471,21 @@ namespace UnitySkills
             if (shouldRun && autoStart && !_isRunning)
             {
                 int failures = EditorPrefs.GetInt(PREF_CONSECUTIVE_FAILURES, 0);
+
+                // Decay: if last failure was more than 5 minutes ago, reset counter
+                if (failures > 0)
+                {
+                    string lastFailTimeKey = PrefKey("LastFailTime");
+                    double lastFailTime = 0;
+                    double.TryParse(EditorPrefs.GetString(lastFailTimeKey, "0"), out lastFailTime);
+                    if (EditorApplication.timeSinceStartup - lastFailTime > 300)
+                    {
+                        failures = 0;
+                        EditorPrefs.SetInt(PREF_CONSECUTIVE_FAILURES, 0);
+                        SkillsLogger.LogVerbose("[UnitySkills] Consecutive failure counter reset (5 min decay)");
+                    }
+                }
+
                 if (failures >= MaxConsecutiveFailures)
                 {
                     SkillsLogger.LogError(
@@ -498,6 +517,7 @@ namespace UnitySkills
                     // 本轮所有重试耗尽
                     _restoreRetryCount = 0;
                     EditorPrefs.SetInt(PREF_CONSECUTIVE_FAILURES, failures + 1);
+                    EditorPrefs.SetString(PrefKey("LastFailTime"), EditorApplication.timeSinceStartup.ToString());
                     SkillsLogger.LogError(
                         $"[UnitySkills] Server failed to restart (consecutive failures: {failures + 1}/{MaxConsecutiveFailures}). " +
                         "Will retry on next Domain Reload. Manual start: Window > UnitySkills > Start Server");
@@ -1071,11 +1091,28 @@ namespace UnitySkills
                     }
                 }
             }
-        }
 
-        /// <summary>
-        /// Processes a single job. Runs on MAIN THREAD - all Unity API safe.
-        /// </summary>
+            // Safety net: recover server after Domain Reload if delayCall failed to fire
+            if (!_isRunning && !_domainReloadPending)
+            {
+                if (now - _lastSafetyNetCheck > SafetyNetInterval)
+                {
+                    _lastSafetyNetCheck = now;
+                    bool shouldRun = EditorPrefs.GetBool(PREF_SERVER_SHOULD_RUN, false);
+                    if (shouldRun && AutoStart)
+                    {
+                        int failures = EditorPrefs.GetInt(PREF_CONSECUTIVE_FAILURES, 0);
+                        if (failures < MaxConsecutiveFailures)
+                        {
+                            SkillsLogger.Log("[SafetyNet] Server should be running but isn't — attempting recovery...");
+                            int lastPort = EditorPrefs.GetInt(PREF_LAST_PORT, 0);
+                            int restorePort = (lastPort >= 8090 && lastPort <= 8100) ? lastPort : PreferredPort;
+                            Start(restorePort, fallbackToAuto: true);
+                        }
+                    }
+                }
+            }
+        }
         private static void ProcessJob(RequestJob job)
         {
             // Handle OPTIONS (CORS preflight)
