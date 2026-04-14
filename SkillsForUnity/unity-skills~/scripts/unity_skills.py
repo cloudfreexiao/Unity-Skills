@@ -263,7 +263,8 @@ class UnitySkills:
         response.encoding = 'utf-8'
         return response
 
-    def call(self, skill_name: str, verbose: bool = False, _retries: int = 3, _retry_delay: float = 2.0, **kwargs) -> Dict[str, Any]:
+    def call(self, skill_name: str, verbose: bool = False, wait_for_job: bool = False,
+             job_timeout: float = 60.0, _retries: int = 3, _retry_delay: float = 2.0, **kwargs) -> Dict[str, Any]:
         """
         Call a skill on this instance with automatic retry on connection errors.
 
@@ -293,6 +294,8 @@ class UnitySkills:
                         normalized.update(result)
                     else:
                         normalized['result'] = result
+                    if wait_for_job and isinstance(normalized, dict) and normalized.get('jobId'):
+                        return self.wait_for_job(normalized['jobId'], timeout=job_timeout)
                     return normalized
                 elif data.get('status') == 'error':
                     return {
@@ -301,6 +304,8 @@ class UnitySkills:
                         'message': data.get('message', '')
                     }
                 else:
+                    if wait_for_job and isinstance(data, dict) and data.get('jobId'):
+                        return self.wait_for_job(data['jobId'], timeout=job_timeout)
                     return data
 
             except requests.exceptions.Timeout as e:
@@ -348,6 +353,21 @@ class UnitySkills:
             return {'status': 'error', 'error': f'Invalid JSON response: {exc}'}
         except Exception as exc:
             return {'status': 'error', 'error': str(exc)}
+
+    def get_job_status(self, job_id: str) -> Dict[str, Any]:
+        return self.call('job_status', jobId=job_id)
+
+    def get_job_logs(self, job_id: str, limit: int = 100) -> Dict[str, Any]:
+        return self.call('job_logs', jobId=job_id, limit=limit)
+
+    def wait_for_job(self, job_id: str, timeout: float = 60.0) -> Dict[str, Any]:
+        timeout_ms = max(1000, int(timeout * 1000))
+        result = self.call('job_wait', jobId=job_id, timeoutMs=timeout_ms)
+        if isinstance(result, dict) and result.get('reportId'):
+            report = self.call('batch_report_get', reportId=result['reportId'])
+            if isinstance(report, dict) and report.get('success'):
+                result['report'] = report
+        return result
 
 
 # Global Default Client (lazy initialization)
@@ -435,6 +455,21 @@ def plan_workflow(goal: str = None, target_output: str = None, max_depth: int = 
 def call_skill(skill_name: str, **kwargs) -> Dict[str, Any]:
     """Call a Unity skill. Single-call auto-workflow is handled by the Unity server."""
     return _get_default_client().call(skill_name, **kwargs)
+
+
+def get_job_status(job_id: str) -> Dict[str, Any]:
+    """Get status for an asynchronous UnitySkills batch job."""
+    return _get_default_client().get_job_status(job_id)
+
+
+def get_job_logs(job_id: str, limit: int = 100) -> Dict[str, Any]:
+    """Get structured logs for an asynchronous UnitySkills batch job."""
+    return _get_default_client().get_job_logs(job_id, limit=limit)
+
+
+def wait_for_job(job_id: str, timeout: float = 60.0) -> Dict[str, Any]:
+    """Wait for a UnitySkills batch job and include the final report when available."""
+    return _get_default_client().wait_for_job(job_id, timeout=timeout)
 
 
 class WorkflowContext:
