@@ -1187,7 +1187,7 @@ namespace UnitySkills
                 return;
             }
             
-            // Execute skill
+            // Execute / DryRun / Plan skill
             if (path.StartsWith("/skill/") && job.HttpMethod == "POST")
             {
                 if (_domainReloadPending || ServerAvailabilityHelper.IsCompilationInProgress())
@@ -1207,7 +1207,7 @@ namespace UnitySkills
                     }, _jsonSettings);
                     return;
                 }
-                
+
                 // Extract skill name (preserve original case) and validate
                 string skillName = job.Path.Substring(7);
                 if (skillName.Contains("/") || skillName.Contains("\\") || skillName.Contains(".."))
@@ -1216,22 +1216,37 @@ namespace UnitySkills
                     job.ResponseJson = JsonConvert.SerializeObject(new { error = "Invalid skill name" }, _jsonSettings);
                     return;
                 }
-                
-                // Dry-run mode: validate parameters without executing
+
                 var skillQs = SkillRouter.ParseQueryString(job.QueryString);
-                if (skillQs.TryGetValue("dryRun", out var dryRunVal) && dryRunVal.Equals("true", StringComparison.OrdinalIgnoreCase))
+                SkillRouter.RequestMode mode = SkillRouter.RequestMode.Execute;
+                if (skillQs.TryGetValue("mode", out var modeValue) && !string.IsNullOrWhiteSpace(modeValue))
                 {
-                    job.StatusCode = 200;
-                    job.ResponseJson = SkillRouter.DryRun(skillName, job.Body);
-                    return;
+                    if (modeValue.Equals("dryRun", StringComparison.OrdinalIgnoreCase))
+                        mode = SkillRouter.RequestMode.DryRun;
+                    else if (modeValue.Equals("plan", StringComparison.OrdinalIgnoreCase))
+                        mode = SkillRouter.RequestMode.Plan;
+                }
+                else if (skillQs.TryGetValue("dryRun", out var dryRunVal) && dryRunVal.Equals("true", StringComparison.OrdinalIgnoreCase))
+                {
+                    mode = SkillRouter.RequestMode.DryRun;
                 }
 
-                // Execute skill (safe - on main thread)
                 try
                 {
                     job.StatusCode = 200;
-                    job.ResponseJson = SkillRouter.Execute(skillName, job.Body);
-                    SkillsLogger.LogAgent(job.AgentId, skillName);
+                    switch (mode)
+                    {
+                        case SkillRouter.RequestMode.DryRun:
+                            job.ResponseJson = SkillRouter.DryRun(skillName, job.Body);
+                            break;
+                        case SkillRouter.RequestMode.Plan:
+                            job.ResponseJson = SkillRouter.Plan(skillName, job.Body);
+                            break;
+                        default:
+                            job.ResponseJson = SkillRouter.Execute(skillName, job.Body);
+                            SkillsLogger.LogAgent(job.AgentId, skillName);
+                            break;
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -1247,12 +1262,23 @@ namespace UnitySkills
                 }
                 return;
             }
-            
+
+
             // Not found
             job.StatusCode = 404;
             job.ResponseJson = JsonConvert.SerializeObject(new {
                 error = "Not found",
-                endpoints = new[] { "GET /skills", "GET /skills/recommend", "GET /skills/chain", "POST /skill/{name}", "POST /skill/{name}?dryRun=true", "GET /health" }
+                endpoints = new[]
+                {
+                    "GET /skills",
+                    "GET /skills/recommend",
+                    "GET /skills/chain",
+                    "POST /skill/{name}",
+                    "POST /skill/{name}?mode=dryRun",
+                    "POST /skill/{name}?mode=plan",
+                    "POST /skill/{name}?dryRun=true",
+                    "GET /health"
+                }
             }, _jsonSettings);
         }
 

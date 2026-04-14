@@ -248,6 +248,21 @@ class UnitySkills:
 
         return None
 
+    def _post_skill(self, skill_name: str, payload: Dict[str, Any], mode: str = None, timeout: Optional[int] = None):
+        params = {}
+        if mode:
+            params['mode'] = mode
+        qs = f"?{urlencode(params)}" if params else ""
+        json_data = json.dumps(payload, ensure_ascii=False)
+        response = self._session.post(
+            f"{self.url}/skill/{skill_name}{qs}",
+            data=json_data.encode('utf-8'),
+            headers={'Content-Type': 'application/json; charset=utf-8'},
+            timeout=timeout or self.timeout
+        )
+        response.encoding = 'utf-8'
+        return response
+
     def call(self, skill_name: str, verbose: bool = False, _retries: int = 3, _retry_delay: float = 2.0, **kwargs) -> Dict[str, Any]:
         """
         Call a skill on this instance with automatic retry on connection errors.
@@ -263,27 +278,16 @@ class UnitySkills:
         last_error = None
         for attempt in range(_retries + 1):
             try:
-                # Combine verbose into kwargs for JSON body
                 kwargs['verbose'] = verbose
-                # Preserve raw Unicode characters instead of forcing \\uXXXX escapes.
-                json_data = json.dumps(kwargs, ensure_ascii=False)
-                response = self._session.post(
-                    f"{self.url}/skill/{skill_name}",
-                    data=json_data.encode('utf-8'),
-                    headers={'Content-Type': 'application/json; charset=utf-8'},
-                    timeout=self.timeout
-                )
-                response.encoding = 'utf-8'  # Always decode server responses as UTF-8.
+                response = self._post_skill(skill_name, kwargs)
 
                 try:
                     data = response.json()
                 except ValueError:
                     return {'success': False, 'error': f"Invalid JSON response: {response.text}"}
 
-                # Normalize server responses into the helper's flat success/error shape.
                 if data.get('status') == 'success':
                     result = data.get('result', {})
-                    # Lift result fields to the top level for convenience.
                     normalized = {'success': True}
                     if isinstance(result, dict):
                         normalized.update(result)
@@ -327,10 +331,23 @@ class UnitySkills:
             except Exception as e:
                 return {'success': False, 'error': str(e)}
 
-    # --- Proxies for common skills ---
-    def create_cube(self, x=0, y=0, z=0, name="Cube"): return self.call("create_cube", x=x, y=y, z=z, name=name)
-    def create_sphere(self, x=0, y=0, z=0, name="Sphere"): return self.call("create_sphere", x=x, y=y, z=z, name=name)
-    def delete_object(self, name): return self.call("delete_object", objectName=name)
+    def dry_run_skill(self, skill_name: str, **kwargs) -> Dict[str, Any]:
+        try:
+            response = self._post_skill(skill_name, kwargs, mode='dryRun')
+            return response.json()
+        except ValueError as exc:
+            return {'status': 'error', 'error': f'Invalid JSON response: {exc}'}
+        except Exception as exc:
+            return {'status': 'error', 'error': str(exc)}
+
+    def plan_skill(self, skill_name: str, **kwargs) -> Dict[str, Any]:
+        try:
+            response = self._post_skill(skill_name, kwargs, mode='plan')
+            return response.json()
+        except ValueError as exc:
+            return {'status': 'error', 'error': f'Invalid JSON response: {exc}'}
+        except Exception as exc:
+            return {'status': 'error', 'error': str(exc)}
 
 
 # Global Default Client (lazy initialization)
@@ -393,6 +410,27 @@ def list_instances() -> list:
     for info in data.values():
         results.append(dict(info))
     return results
+
+def dry_run_skill(skill_name: str, **kwargs) -> Dict[str, Any]:
+    """Validate a Unity skill call without executing it."""
+    return _get_default_client().dry_run_skill(skill_name, **kwargs)
+
+
+def plan_skill(skill_name: str, **kwargs) -> Dict[str, Any]:
+    """Preview a Unity skill call with generic/semantic planning details."""
+    return _get_default_client().plan_skill(skill_name, **kwargs)
+
+
+def plan_workflow(goal: str = None, target_output: str = None, max_depth: int = 3) -> Dict[str, Any]:
+    """Build a lightweight workflow plan from skill recommendations and dependency chain data."""
+    result: Dict[str, Any] = {'status': 'plan', 'goal': goal, 'targetOutput': target_output}
+    if goal:
+        result['recommendations'] = find_skills(goal)
+    if target_output:
+        result['dependencyChain'] = get_skill_chain(target_output, max_depth=max_depth)
+    result['note'] = 'Workflow planning is currently a client-side composition of recommend + chain results.'
+    return result
+
 
 def call_skill(skill_name: str, **kwargs) -> Dict[str, Any]:
     """Call a Unity skill. Single-call auto-workflow is handled by the Unity server."""
@@ -572,23 +610,18 @@ def find_skills(intent: str, top_n: int = 10) -> Dict[str, Any]:
         return {"status": "error", "error": str(e)}
 
 
-def get_skill_chain(target_output: str) -> List[Dict[str, Any]]:
-    """Find skills that produce a specific output field.
-
-    Useful for building skill chains — e.g. find all skills that output "instanceId"
-    so you know which skills can feed into skills that require "gameObject".
-
-    Args:
-        target_output: The output field name to search for (e.g. "instanceId", "path").
-    """
+def get_skill_chain(target_output: str, max_depth: int = 3) -> Dict[str, Any]:
+    """Find skill producers and dependency chain for a specific output field via the server."""
     try:
-        manifest = get_skills()
-        if manifest.get("status") == "error":
-            return []
-        skills = manifest.get("skills", [])
-        return [s for s in skills if s.get("outputs") and target_output in s["outputs"]]
-    except Exception:
-        return []
+        client = _get_default_client()
+        params = {"output": target_output, "maxDepth": str(max_depth)}
+        response = client._session.get(
+            f"{client.url}/skills/chain?{urlencode(params)}", timeout=client.timeout)
+        response.encoding = 'utf-8'
+        return response.json()
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
 
 def health() -> bool:
     """Check if the current default Unity server is running."""
