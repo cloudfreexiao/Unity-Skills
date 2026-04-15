@@ -203,8 +203,30 @@ namespace UnitySkills
             if (target == null)
                 return null;
 
+            if (target is JObject jObject)
+                return jObject.TryGetValue(name, StringComparison.OrdinalIgnoreCase, out var token) ? UnwrapJToken(token) : null;
+
+            if (target is JToken jToken)
+            {
+                var child = jToken[name];
+                return child != null ? UnwrapJToken(child) : null;
+            }
+
+            if (target is IDictionary<string, object> dict &&
+                dict.TryGetValue(name, out var directValue))
+            {
+                return directValue;
+            }
+
+            if (target is IDictionary legacyDict && legacyDict.Contains(name))
+                return legacyDict[name];
+
             var property = target.GetType().GetProperty(name, BindingFlags.Instance | BindingFlags.Public);
-            return property?.GetValue(target);
+            if (property != null)
+                return property.GetValue(target);
+
+            var field = target.GetType().GetField(name, BindingFlags.Instance | BindingFlags.Public);
+            return field?.GetValue(target);
         }
 
         private static T GetPropertyValue<T>(object target, string name, T fallback = default)
@@ -233,6 +255,24 @@ namespace UnitySkills
                 return enumerable.Cast<object>();
 
             return Enumerable.Empty<object>();
+        }
+
+        private static object UnwrapJToken(JToken token)
+        {
+            if (token == null)
+                return null;
+
+            return token.Type switch
+            {
+                JTokenType.Object => token as JObject,
+                JTokenType.Array => token as JArray,
+                JTokenType.Integer => token.Value<long>(),
+                JTokenType.Float => token.Value<double>(),
+                JTokenType.Boolean => token.Value<bool>(),
+                JTokenType.String => token.Value<string>(),
+                JTokenType.Null => null,
+                _ => ((JValue)token).Value
+            };
         }
 
         private static object[] BuildTopComponents(SceneMetricsSnapshot snapshot, int topComponentsLimit)

@@ -60,7 +60,12 @@ namespace UnitySkills
                 ["outputs"] = skill.Outputs,
                 ["requiresInput"] = skill.RequiresInput,
                 ["readOnly"] = skill.ReadOnly,
-                ["tracksWorkflow"] = skill.TracksWorkflow
+                ["tracksWorkflow"] = skill.TracksWorkflow,
+                ["mutatesScene"] = skill.MutatesScene,
+                ["mutatesAssets"] = skill.MutatesAssets,
+                ["mayTriggerReload"] = skill.MayTriggerReload,
+                ["riskLevel"] = skill.RiskLevel,
+                ["requiresPackages"] = skill.RequiresPackages
             };
         }
 

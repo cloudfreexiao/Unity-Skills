@@ -520,18 +520,16 @@ namespace UnitySkills
 
                 var paramsObj = entry["params"] as JObject ?? new JObject();
                 var planJson = SkillRouter.Plan(skillName, paramsObj.ToString());
-                var planResult = JsonConvert.DeserializeObject<Dictionary<string, object>>(planJson);
+                var planResult = JObject.Parse(planJson);
 
                 // Extract risk level from plan
-                var stepRisk = "low";
-                if (planResult.TryGetValue("skill", out var skillObj) && skillObj is JObject skillJObj)
-                {
-                    stepRisk = skillJObj["riskLevel"]?.ToString() ?? "low";
-                }
+                var stepRisk = planResult.SelectToken("skill.riskLevel")?.ToString()
+                               ?? planResult.SelectToken("impact.riskLevel")?.ToString()
+                               ?? "low";
                 highestRisk = MaxRisk(highestRisk, stepRisk);
 
                 // Check serverAvailability
-                if (planResult.TryGetValue("serverAvailability", out var sa) && sa != null)
+                if (planResult["serverAvailability"] != null)
                     mayDisconnect = true;
 
                 // Detect dependencies: if this step uses a name that a previous step creates
@@ -550,7 +548,7 @@ namespace UnitySkills
                 TrackCreatedNames(planResult, createdNames);
 
                 // Collect warnings from individual plan
-                if (planResult.TryGetValue("validation", out var valObj) && valObj is JObject valJObj)
+                if (planResult["validation"] is JObject valJObj)
                 {
                     var warnings = valJObj["warnings"] as JArray;
                     if (warnings != null)
@@ -589,10 +587,9 @@ namespace UnitySkills
             return Score(a) >= Score(b) ? a : b;
         }
 
-        private static string GetTargetFromPlan(Dictionary<string, object> plan)
+        private static string GetTargetFromPlan(JObject plan)
         {
-            if (!plan.TryGetValue("steps", out var stepsObj)) return null;
-            var steps = stepsObj is JArray arr ? arr : null;
+            var steps = plan["steps"] as JArray;
             if (steps == null || steps.Count == 0) return null;
             return steps[0]?["target"]?.ToString();
         }
@@ -603,10 +600,9 @@ namespace UnitySkills
             {
                 if (steps[i] is Dictionary<string, object> step &&
                     step.TryGetValue("plan", out var planObj) &&
-                    planObj is Dictionary<string, object> plan &&
-                    plan.TryGetValue("changes", out var changesObj))
+                    planObj is JObject plan)
                 {
-                    var changes = changesObj is JObject cj ? cj : null;
+                    var changes = plan["changes"] as JObject;
                     if (changes == null) continue;
                     var creates = changes["create"] as JArray;
                     if (creates != null)
@@ -622,10 +618,9 @@ namespace UnitySkills
             return -1;
         }
 
-        private static void TrackCreatedNames(Dictionary<string, object> plan, HashSet<string> names)
+        private static void TrackCreatedNames(JObject plan, HashSet<string> names)
         {
-            if (!plan.TryGetValue("changes", out var changesObj)) return;
-            var changes = changesObj is JObject cj ? cj : null;
+            var changes = plan["changes"] as JObject;
             if (changes == null) return;
             var creates = changes["create"] as JArray;
             if (creates == null) return;
