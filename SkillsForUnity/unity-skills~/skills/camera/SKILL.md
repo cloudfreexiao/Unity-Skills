@@ -42,9 +42,10 @@ Set Scene View camera position/rotation manually.
 - `instant` (bool, optional): Move instantly (default true).
 
 ### `camera_look_at`
-Focus Scene View camera on a point.
+Focus Scene View camera on a world-space point.
 **Parameters:**
 - `x`, `y`, `z` (float): Target point.
+- Does not support `targetName` or GameObject lookup. For object focus, use `camera_align_view_to_object`.
 
 ### `camera_create`
 Create a new Game Camera.
@@ -170,7 +171,7 @@ Set Scene View camera position/rotation manually.
 | `instant` | bool | No | true | Canonical signature parameter |
 
 ### camera_look_at
-Focus Scene View camera on a point.
+Focus Scene View camera on a world-space point.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|

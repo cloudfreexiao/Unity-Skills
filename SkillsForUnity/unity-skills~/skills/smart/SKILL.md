@@ -31,6 +31,7 @@ Find objects based on component property values (SQL-like).
 | `op` | string | No | "==" | ==, !=, >, <, >=, <=, contains |
 | `value` | string | No | null | Value to compare |
 | `limit` | int | No | 50 | Max results |
+| `query` | string | No | null | Unsupported shorthand; if provided alone returns a guidance error |
 
 **Example**:
 ```python
@@ -180,6 +181,7 @@ Query objects by component property (params: componentName, propertyName, op, va
 | `op` | string | No | "==" | Canonical signature parameter |
 | `value` | string | No | null | Canonical signature parameter |
 | `limit` | int | No | 50 | Canonical signature parameter |
+| `query` | string | No | null | Guidance-only compatibility parameter |
 
 ### smart_scene_layout
 Organize selected objects into a layout (Linear, Grid, Circle, Arc). Requires objects selected in Hierarchy first.
@@ -262,3 +264,4 @@ Select all objects that have a specific component
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
 | `componentName` | string | Yes | - | Canonical signature parameter |
+| `componentType` | string | No | null | Compatibility alias for `componentName` |

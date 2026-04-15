@@ -256,7 +256,7 @@ namespace UnitySkills
             {"audio_set_settings_batch", "Set audio import settings for multiple audio files"},
             {"camera_align_view_to_object", "Align Scene View camera to look at an object."},
             {"camera_get_info", "Get Scene View camera position and rotation."},
-            {"camera_look_at", "Focus Scene View camera on a point."},
+            {"camera_look_at", "Focus Scene View camera on a world-space point (x/y/z only, not object name)."},
             {"camera_set_transform", "Set Scene View camera position/rotation manually."},
             {"cinemachine_add_component", "Add a Cinemachine component (e.g., OrbitalFollow)."},
             {"cinemachine_add_extension", "Add a CinemachineExtension"},
@@ -296,7 +296,7 @@ namespace UnitySkills
             {"event_get_listeners", "Get persistent listeners of a UnityEvent"},
             {"event_invoke", "Invoke a UnityEvent explicitly (Runtime only)"},
             {"event_remove_listener", "Remove a persistent listener by index"},
-            {"find_objects_by_name", "Find all GameObjects containing a name (param: nameContains)"},
+            {"find_objects_by_name", "Find all GameObjects containing a name (supports nameContains/name alias)"},
             {"gameobject_create_batch", "Create multiple GameObjects in one call (Efficient)"},
             {"gameobject_delete_batch", "Delete multiple GameObjects"},
             {"gameobject_duplicate_batch", "Duplicate multiple GameObjects in one call (Efficient)"},
@@ -924,7 +924,7 @@ namespace UnitySkills
             {"camera_align_view_to_object", "对齐 Scene 视图到物体"},
             {"camera_get_info", "获取 Scene 相机信息"},
             {"camera_set_transform", "设置 Scene 相机位置/旋转"},
-            {"camera_look_at", "Scene 相机看向指定点"},
+            {"camera_look_at", "Scene 相机看向世界坐标点（仅支持 x/y/z，不支持对象名）"},
             
             // Timeline Skills
             {"timeline_create", "创建 Timeline 资产及实例"},
@@ -1107,7 +1107,7 @@ namespace UnitySkills
             {"set_object_position", "设置游戏对象位置"},
             {"set_object_rotation", "设置游戏对象旋转 (欧拉角)"},
             {"set_object_scale", "设置游戏对象缩放"},
-            {"find_objects_by_name", "按名称查找所有游戏对象"},
+            {"find_objects_by_name", "按名称查找所有游戏对象（兼容 nameContains/name）"},
 
             // Profiler Skills (new)
             {"profiler_get_memory", "获取内存使用概况 (总分配/保留/Mono堆)"},

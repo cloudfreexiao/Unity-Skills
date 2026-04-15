@@ -36,7 +36,7 @@ Delete object by name.
 
 ### `find_objects_by_name`
 Find objects containing string.
-**Parameters:** `nameContains`
+**Parameters:** `nameContains` (`name` 也可作为兼容别名)
 
 ### `set_object_position`
 Set object position.
@@ -125,8 +125,9 @@ Set scale of a GameObject
 | `z` | float | Yes | - | Canonical signature parameter |
 
 ### find_objects_by_name
-Find all GameObjects containing a name (param: nameContains)
+Find all GameObjects containing a name (supports `nameContains` / `name`)
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
 | `nameContains` | string | Yes | - | Canonical signature parameter |
+| `name` | string | No | null | Compatibility alias for `nameContains` |

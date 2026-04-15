@@ -74,7 +74,7 @@ namespace UnitySkills
             return new { error = "No active Scene View found" };
         }
         
-        [UnitySkill("camera_look_at", "Focus Scene View camera on a point.",
+        [UnitySkill("camera_look_at", "Focus Scene View camera on a world-space point (x/y/z only, not object name).",
             Category = SkillCategory.Camera, Operation = SkillOperation.Execute,
             Tags = new[] { "scene-view", "look-at", "focus", "navigate" },
             Outputs = new[] { "success" })]
