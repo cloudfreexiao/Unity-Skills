@@ -108,6 +108,8 @@ namespace UnitySkills
         public string workflowId;
         public string jobId;
         public bool rollbackAvailable;
+        public BatchTargetQuery query;
+        public Dictionary<string, object> operation = new Dictionary<string, object>();
         public BatchReportTotals totals = new BatchReportTotals();
         public List<BatchReportItemRecord> items = new List<BatchReportItemRecord>();
         public List<BatchFailureGroup> failureGroups = new List<BatchFailureGroup>();

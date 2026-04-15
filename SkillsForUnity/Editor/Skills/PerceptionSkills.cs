@@ -2891,6 +2891,15 @@ namespace UnitySkills
                     if (!string.Equals(curComponents, prevComponents, StringComparison.Ordinal))
                         changes.Add("components");
 
+                    if (HasVectorDifference(kvp.Value, prev, "position"))
+                        changes.Add("position");
+
+                    if (HasVectorDifference(kvp.Value, prev, "rotation"))
+                        changes.Add("rotation");
+
+                    if (HasVectorDifference(kvp.Value, prev, "scale"))
+                        changes.Add("scale");
+
                     if (changes.Count > 0)
                     {
                         modified.Add(new
@@ -2944,6 +2953,37 @@ namespace UnitySkills
                 });
             }
             return snapshot;
+        }
+
+        private static bool HasVectorDifference(
+            IDictionary<string, object> current,
+            JObject previous,
+            string propertyName,
+            float tolerance = 0.0001f)
+        {
+            if (current == null || previous == null)
+                return false;
+
+            var currentToken = current.TryGetValue(propertyName, out var currentValue)
+                ? JToken.FromObject(currentValue)
+                : null;
+            var previousToken = previous[propertyName];
+            if (currentToken == null || previousToken == null)
+                return false;
+
+            return HasNumericDifference(currentToken["x"], previousToken["x"], tolerance) ||
+                   HasNumericDifference(currentToken["y"], previousToken["y"], tolerance) ||
+                   HasNumericDifference(currentToken["z"], previousToken["z"], tolerance);
+        }
+
+        private static bool HasNumericDifference(JToken current, JToken previous, float tolerance)
+        {
+            if (current == null || previous == null)
+                return false;
+
+            var currentValue = current.Value<float>();
+            var previousValue = previous.Value<float>();
+            return Mathf.Abs(currentValue - previousValue) > tolerance;
         }
     }
 }

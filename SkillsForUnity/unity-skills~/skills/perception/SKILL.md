@@ -94,6 +94,21 @@ Find deep hierarchies, large child groups, duplicate-name clusters, and empty-no
 
 ---
 
+### scene_diff
+Capture a lightweight scene snapshot, or compare the current scene against a previous snapshot.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `snapshotJson` | string | No | - | Omit to capture a snapshot; pass a previously returned snapshot array to compare |
+
+**Returns when capturing:** `mode`, `sceneName`, `objectCount`, `snapshot`
+
+**Returns when diffing:** `mode`, `sceneName`, `summary`, `added`, `removed`, `modified`
+
+`modified` currently reports `name`, `path`, `components`, `position`, `rotation`, and `scale` changes.
+
+---
+
 ### scene_summarize
 Get a structured summary of the current scene.
 

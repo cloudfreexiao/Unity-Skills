@@ -119,7 +119,8 @@ namespace UnitySkills
             Category = SkillCategory.Script, Operation = SkillOperation.Delete,
             Tags = new[] { "script", "delete", "remove", "file" },
             Outputs = new[] { "deleted", "jobId" },
-            RequiresInput = new[] { "scriptPath" })]
+            RequiresInput = new[] { "scriptPath" },
+            MutatesAssets = true, MayTriggerReload = true, RiskLevel = "high")]
         public static object ScriptDelete(string scriptPath)
         {
             if (Validate.SafePath(scriptPath, "scriptPath", isDelete: true) is object pathErr) return pathErr;
@@ -192,7 +193,8 @@ namespace UnitySkills
             Category = SkillCategory.Script, Operation = SkillOperation.Modify,
             Tags = new[] { "script", "append", "insert", "code" },
             Outputs = new[] { "path", "jobId" },
-            RequiresInput = new[] { "scriptPath" })]
+            RequiresInput = new[] { "scriptPath" },
+            MutatesAssets = true, MayTriggerReload = true, RiskLevel = "high")]
         public static object ScriptAppend(string scriptPath, string content, int atLine = -1, bool checkCompile = true, int diagnosticLimit = DefaultDiagnosticLimit)
         {
             if (Validate.SafePath(scriptPath, "scriptPath") is object pathErr) return pathErr;
@@ -223,7 +225,8 @@ namespace UnitySkills
             Category = SkillCategory.Script, Operation = SkillOperation.Modify,
             Tags = new[] { "script", "replace", "find", "refactor" },
             Outputs = new[] { "path", "replacements", "jobId" },
-            RequiresInput = new[] { "scriptPath" })]
+            RequiresInput = new[] { "scriptPath" },
+            MutatesAssets = true, MayTriggerReload = true, RiskLevel = "high")]
         public static object ScriptReplace(string scriptPath, string find, string replace, bool isRegex = false, bool checkCompile = true, int diagnosticLimit = DefaultDiagnosticLimit)
         {
             if (Validate.SafePath(scriptPath, "scriptPath") is object pathErr) return pathErr;

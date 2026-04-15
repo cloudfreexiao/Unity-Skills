@@ -1,3 +1,4 @@
+using System.Linq;
 using NUnit.Framework;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -181,6 +182,61 @@ namespace UnitySkills.Tests.Core
                         $"suggestedNextSkills contains invalid skill: {skillName}");
                 }
             }
+        }
+
+        [Test]
+        public void SceneDiff_WithoutSnapshot_CapturesCurrentState()
+        {
+            var result = PerceptionSkills.SceneDiff();
+            var json = ToJObject(result);
+
+            Assert.IsTrue(json["success"]?.Value<bool>() ?? false);
+            Assert.AreEqual("snapshot", json["mode"]?.ToString());
+            Assert.IsNotNull(json["snapshot"]);
+        }
+
+        [Test]
+        public void SceneDiff_DetectsAddedAndRemovedObjects()
+        {
+            var kept = new GameObject("KeepMe");
+            var removed = new GameObject("RemoveMe");
+            GameObjectFinder.InvalidateCache();
+
+            var snapshotResult = ToJObject(PerceptionSkills.SceneDiff());
+            var snapshotJson = snapshotResult["snapshot"]?.ToString(Formatting.None);
+
+            UnityEngine.Object.DestroyImmediate(removed);
+            new GameObject("AddedLater");
+            GameObjectFinder.InvalidateCache();
+
+            var diffResult = ToJObject(PerceptionSkills.SceneDiff(snapshotJson));
+
+            Assert.IsTrue(diffResult["success"]?.Value<bool>() ?? false);
+            Assert.AreEqual("diff", diffResult["mode"]?.ToString());
+            Assert.IsTrue((diffResult["added"] as JArray)?.Any(item => item["name"]?.ToString() == "AddedLater") ?? false);
+            Assert.IsTrue((diffResult["removed"] as JArray)?.Any(item => item["name"]?.ToString() == "RemoveMe") ?? false);
+            Assert.IsNotNull(kept);
+        }
+
+        [Test]
+        public void SceneDiff_DetectsModifiedTransform()
+        {
+            var go = new GameObject("Mover");
+            go.transform.localPosition = new Vector3(1f, 2f, 3f);
+            GameObjectFinder.InvalidateCache();
+
+            var snapshotResult = ToJObject(PerceptionSkills.SceneDiff());
+            var snapshotJson = snapshotResult["snapshot"]?.ToString(Formatting.None);
+
+            go.transform.localPosition = new Vector3(4f, 5f, 6f);
+            GameObjectFinder.InvalidateCache();
+
+            var diffResult = ToJObject(PerceptionSkills.SceneDiff(snapshotJson));
+            var modified = diffResult["modified"] as JArray;
+
+            Assert.IsTrue(modified?.Any(item =>
+                item["name"]?.ToString() == "Mover" &&
+                (item["changes"] as JArray)?.Any(change => change?.ToString() == "position") == true) ?? false);
         }
     }
 }

@@ -405,6 +405,8 @@ namespace UnitySkills
             {"workflow_undo_task", "Undo changes from a specific task (restore to previous state)"},
             {"workflow_undone_list", "List all undone tasks that can be redone"},
             {"workflow_plan", "Generate a combined execution plan for multiple skills"},
+            {"batch_query_assets", "Query project assets by type, folder, label, and name pattern"},
+            {"batch_retry_failed", "Retry only the failed items from a previous batch report"},
 
             // Profiler Skills
             {"profiler_get_memory", "Get memory usage overview (total allocated, reserved, mono heap)"},
@@ -1088,6 +1090,8 @@ namespace UnitySkills
             {"workflow_session_list", "列出所有会话历史"},
             {"workflow_session_status", "获取当前会话状态"},
             {"workflow_plan", "为多个技能生成组合执行计划"},
+            {"batch_query_assets", "按类型、目录、标签和名称模式查询项目资源"},
+            {"batch_retry_failed", "仅重试之前批处理报告中的失败项"},
 
             // Editor Skills (Complete)
             {"editor_get_context", "获取完整编辑器上下文 (选中对象/资源/场景/窗口)"},

@@ -42,6 +42,7 @@ namespace UnitySkills
                 status = "queued",
                 progress = 0,
                 currentStage = currentStage,
+                progressStage = currentStage,
                 startedAt = now,
                 updatedAt = now,
                 resultSummary = resultSummary,
@@ -50,6 +51,13 @@ namespace UnitySkills
                 resultData = resultData ?? new Dictionary<string, object>()
             };
 
+            job.progressEvents.Add(new BatchJobProgressEvent
+            {
+                timestamp = now,
+                progress = 0,
+                stage = currentStage,
+                description = resultSummary
+            });
             AddLog(job, "info", currentStage, resultSummary, "job_created");
             BatchPersistence.UpsertJob(job);
             return job;
@@ -85,6 +93,7 @@ namespace UnitySkills
 
             job.status = ServerAvailabilityHelper.IsCompilationInProgress() ? "waiting_domain_reload" : "running";
             job.progress = ServerAvailabilityHelper.IsCompilationInProgress() ? 35 : 10;
+            job.progressStage = job.currentStage;
             job.updatedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
             BatchPersistence.UpsertJob(job);
             return job;
@@ -119,6 +128,7 @@ namespace UnitySkills
 
             job.status = "waiting_external";
             job.progress = 5;
+            job.progressStage = job.currentStage;
             job.updatedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
             BatchPersistence.UpsertJob(job);
             return job;
@@ -167,9 +177,18 @@ namespace UnitySkills
 
             job.status = "running";
             job.currentStage = "starting";
+            job.progressStage = "starting";
+            job.progress = 1;
             job.resultSummary = "Launching Unity Test Runner.";
             job.updatedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
             AddLog(job, "info", "starting", $"Starting {testMode} tests.", "test_start");
+            job.progressEvents.Add(new BatchJobProgressEvent
+            {
+                timestamp = job.updatedAt,
+                progress = job.progress,
+                stage = "starting",
+                description = job.resultSummary
+            });
             BatchPersistence.UpsertJob(job);
 
             api.Execute(new ExecutionSettings(filterObj));
@@ -351,6 +370,7 @@ namespace UnitySkills
 
             if (checkCompile && supportsDiagnostics && !string.IsNullOrEmpty(scriptPath))
             {
+                Transition(job, "running", "verifying", 90, "Collecting compilation diagnostics.", "compile_verifying");
                 var compilation = ScriptSkills.GetCompilationFeedbackSnapshot(scriptPath, diagnosticLimit);
                 resultData["compilation"] = compilation;
                 if (TryGetCompilationHasErrors(compilation))
@@ -522,14 +542,8 @@ namespace UnitySkills
             if (job == null || IsTerminal(job.status))
                 return;
 
-            job.status = "running";
-            job.currentStage = "running";
-            job.progress = 5;
-            job.updatedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-            job.resultSummary = $"Running {totalTests} tests.";
             job.resultData["totalTests"] = totalTests;
-            AddLog(job, "info", "running", $"Test run started with {totalTests} tests.", "test_running");
-            BatchPersistence.UpsertJob(job);
+            Transition(job, "running", "running", 5, $"Running {totalTests} tests.", "test_running");
         }
 
         private static void UpdateTestFinished(string jobId, int passedTests, int failedTests, string failedTestName)
@@ -554,6 +568,7 @@ namespace UnitySkills
                 job.progress = Math.Min(95, (int)Math.Round((passedTests + failedTests) * 100.0 / totalTests));
 
             job.updatedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+            job.progressStage = "running";
             job.resultSummary = failedTests > 0
                 ? $"{passedTests} passed, {failedTests} failed."
                 : $"{passedTests} tests passed.";
@@ -569,6 +584,7 @@ namespace UnitySkills
             var passedTests = GetResultInt(job, "passedTests", 0);
             var failedTests = GetResultInt(job, "failedTests", 0);
             var totalTests = GetResultInt(job, "totalTests", 0);
+            Transition(job, "running", "collecting_results", 95, "Collecting final Unity Test Runner results.", "test_collecting");
             var summary = failedTests > 0
                 ? $"Test run completed: {passedTests}/{totalTests} passed, {failedTests} failed."
                 : $"Test run completed: {passedTests}/{totalTests} passed.";

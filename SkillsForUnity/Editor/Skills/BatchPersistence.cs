@@ -212,6 +212,7 @@ namespace UnitySkills
 
             foreach (var report in _state.reports.Where(report => report != null))
             {
+                report.operation ??= new System.Collections.Generic.Dictionary<string, object>();
                 report.items ??= new System.Collections.Generic.List<BatchReportItemRecord>();
                 report.failureGroups ??= new System.Collections.Generic.List<BatchFailureGroup>();
                 report.totals ??= new BatchReportTotals();

@@ -249,6 +249,8 @@ namespace UnitySkills
                 workflowId = report.workflowId,
                 jobId = report.jobId,
                 rollbackAvailable = report.rollbackAvailable,
+                query = report.query,
+                operation = report.operation,
                 totals = report.totals,
                 failureGroups = report.failureGroups,
                 items = report.items
@@ -516,6 +518,15 @@ namespace UnitySkills
             if (failedItems == null || failedItems.Count == 0)
                 return new { success = true, retryCount = 0, message = "No failed items to retry.", originalReportId = reportId };
 
+            if (!CanRetryFromReport(report))
+            {
+                return new
+                {
+                    success = false,
+                    error = $"Report '{reportId}' does not contain enough operation context to retry kind '{report.kind}'. Re-run the original preview first."
+                };
+            }
+
             // Reconstruct a preview envelope from failed items
             var preview = new BatchPreviewEnvelope
             {
@@ -527,14 +538,14 @@ namespace UnitySkills
                 summary = $"Retry {failedItems.Count} failed items from report {reportId}.",
                 rollbackAvailable = report.rollbackAvailable,
                 mayCreateJob = true,
+                query = CloneQuery(report.query),
                 targetCount = failedItems.Count,
                 executableCount = failedItems.Count,
                 skipCount = 0,
-                operation = new Dictionary<string, object>
-                {
-                    ["retrySource"] = reportId
-                }
+                operation = CloneOperation(report.operation)
             };
+
+            preview.operation["retrySource"] = reportId;
 
             foreach (var fi in failedItems)
             {
@@ -549,7 +560,7 @@ namespace UnitySkills
                 });
             }
 
-            BatchPersistence.SavePreview(preview);
+            BatchPersistence.UpsertPreview(preview);
 
             // Immediately execute
             var job = BatchJobService.Start(preview, chunkSize);
@@ -622,6 +633,8 @@ namespace UnitySkills
                 workflowId = job.relatedWorkflowId,
                 jobId = job.jobId,
                 rollbackAvailable = !string.IsNullOrEmpty(job.relatedWorkflowId),
+                query = CloneQuery(job.preview?.query),
+                operation = CloneOperation(job.preview?.operation),
                 items = job.items.ToList()
             };
 
@@ -637,6 +650,44 @@ namespace UnitySkills
                 .ToList();
             report.summary = $"{report.totals.success} succeeded, {report.totals.failed} failed, {report.totals.skipped} skipped.";
             return report;
+        }
+
+        private static bool CanRetryFromReport(BatchReportRecord report)
+        {
+            if (report == null)
+                return false;
+
+            if (report.operation != null && report.operation.Count > 0)
+                return true;
+
+            switch (report.kind)
+            {
+                case "rename":
+                case "cleanup_temp_objects":
+                case "fix_missing_scripts":
+                    return true;
+                default:
+                    return false;
+            }
+        }
+
+        private static BatchTargetQuery CloneQuery(BatchTargetQuery query)
+        {
+            if (query == null)
+                return null;
+
+            return JsonConvert.DeserializeObject<BatchTargetQuery>(
+                JsonConvert.SerializeObject(query));
+        }
+
+        private static Dictionary<string, object> CloneOperation(Dictionary<string, object> operation)
+        {
+            if (operation == null)
+                return new Dictionary<string, object>();
+
+            return JsonConvert.DeserializeObject<Dictionary<string, object>>(
+                       JsonConvert.SerializeObject(operation))
+                   ?? new Dictionary<string, object>();
         }
 
         private static BatchTargetQuery ParseQuery(string queryJson)

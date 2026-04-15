@@ -1,3 +1,5 @@
+using System;
+using System.Collections.Generic;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using NUnit.Framework;
@@ -163,6 +165,55 @@ namespace UnitySkills.Tests.Core
             // Retry should find 0 failed items
             var retry = ToJObject(BatchSkills.BatchRetryFailed(reportId));
             Assert.AreEqual(0, retry["retryCount"]?.Value<int>());
+        }
+
+        [Test]
+        public void BatchRetryFailed_ReplaysStoredOperationContext()
+        {
+            var go = new GameObject("RetryLight");
+            var light = go.AddComponent<Light>();
+            light.intensity = 1f;
+            GameObjectFinder.InvalidateCache();
+
+            var reportId = Guid.NewGuid().ToString("N").Substring(0, 8);
+            var report = new BatchReportRecord
+            {
+                reportId = reportId,
+                kind = "set_property",
+                status = "completed",
+                createdAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
+                query = new BatchTargetQuery
+                {
+                    name = "RetryLight",
+                    includeInactive = true
+                },
+                operation = new Dictionary<string, object>
+                {
+                    ["componentType"] = "Light",
+                    ["propertyName"] = "intensity",
+                    ["value"] = "2"
+                }
+            };
+
+            report.items.Add(new BatchReportItemRecord
+            {
+                targetName = go.name,
+                targetPath = GameObjectFinder.GetCachedPath(go),
+                instanceId = go.GetInstanceID(),
+                action = "set_property",
+                status = "failed",
+                before = "1",
+                after = "2",
+                reason = "mock_failure"
+            });
+
+            BatchPersistence.UpsertReport(report);
+
+            var retry = ToJObject(BatchSkills.BatchRetryFailed(reportId, runAsync: false, chunkSize: 10));
+
+            Assert.AreEqual("completed", retry["status"]?.ToString());
+            Assert.AreEqual(1, retry["retryCount"]?.Value<int>());
+            Assert.AreEqual(2f, go.GetComponent<Light>().intensity);
         }
     }
 }

@@ -113,6 +113,18 @@ namespace UnitySkills.Tests.Core
             Assert.IsFalse(obj["impact"]?["mayTriggerReload"]?.Value<bool>() ?? true);
         }
 
+        [Test]
+        public void DryRun_ScriptReplace_ReportsReloadRisk()
+        {
+            var json = SkillRouter.DryRun("script_replace", "{\"scriptPath\":\"Assets/Scripts/Test.cs\",\"find\":\"A\",\"replace\":\"B\"}");
+            var obj = JObject.Parse(json);
+
+            Assert.AreEqual("dryRun", obj["status"]?.ToString());
+            Assert.IsTrue(obj["impact"]?["mutatesAssets"]?.Value<bool>() ?? false);
+            Assert.IsTrue(obj["impact"]?["mayTriggerReload"]?.Value<bool>() ?? false);
+            Assert.AreEqual("high", obj["impact"]?["riskLevel"]?.ToString());
+        }
+
         // === New tests: Scene/Prefab/Script semantic planners ===
 
         [Test]
@@ -172,9 +184,11 @@ namespace UnitySkills.Tests.Core
 
             var result = SkillRouter.Execute("workflow_plan", requestJson);
             var obj = JObject.Parse(result);
+            var payload = obj["result"] as JObject ?? obj;
 
-            // workflow_plan returns via Execute, result is in the top-level
-            Assert.IsNotNull(obj["result"]?["totalSteps"] ?? obj["totalSteps"]);
+            Assert.AreEqual(2, payload["totalSteps"]?.Value<int>());
+            Assert.AreEqual("medium", payload["totalRisk"]?.ToString());
+            Assert.IsTrue((payload["dependencies"] as JArray)?.Count > 0);
         }
     }
 }

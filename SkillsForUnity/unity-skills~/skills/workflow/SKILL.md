@@ -89,6 +89,42 @@ No parameters.
 
 **Returns:** `{ success, currentGroup, groupIndex }`
 
+## Planning And Batch Governance
+
+### `workflow_plan`
+Generate a combined execution plan for multiple skills on the server side.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `skillsJson` | string | Yes | - | JSON array of `{ "name": "...", "params": { ... } }` entries |
+
+**Returns:** `{ totalSteps, totalRisk, steps, dependencies, warnings, mayDisconnect }`
+
+### `batch_query_assets`
+Query project assets with filters that are useful before batch cleanup or migration work.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `searchFilter` | string | No | - | Extra `AssetDatabase.FindAssets` filter text |
+| `folder` | string | No | `Assets` | Search root |
+| `typeFilter` | string | No | - | Asset type filter such as `t:Material` or `Prefab` |
+| `namePattern` | string | No | - | Regex applied to file name without extension |
+| `labelFilter` | string | No | - | Asset label filter such as `l:Addressable` |
+| `maxResults` | int | No | `200` | Max assets returned |
+
+**Returns:** `{ count, totalMatched, summary, assets }`
+
+### `batch_retry_failed`
+Retry only the failed items from an earlier batch execution report. This now reuses the original operation context stored in the report.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `reportId` | string | Yes | - | Source report ID from `batch_report_get` / `batch_report_list` |
+| `runAsync` | bool | No | `true` | Return a `jobId` immediately or wait for completion |
+| `chunkSize` | int | No | `100` | Chunk size for retry execution |
+
+**Returns:** `{ status, jobId?, retryCount, originalReportId, reportId? }`
+
 ## Session Management (Conversation-Level Undo)
 
 ### `workflow_session_start`

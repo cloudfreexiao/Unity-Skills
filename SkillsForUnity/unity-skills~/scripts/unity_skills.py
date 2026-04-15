@@ -354,6 +354,9 @@ class UnitySkills:
         except Exception as exc:
             return {'status': 'error', 'error': str(exc)}
 
+    def plan_workflow(self, skills: List[Dict[str, Any]]) -> Dict[str, Any]:
+        return self.call('workflow_plan', skillsJson=json.dumps(skills, ensure_ascii=False))
+
     def get_job_status(self, job_id: str) -> Dict[str, Any]:
         return self.call('job_status', jobId=job_id)
 
@@ -441,14 +444,30 @@ def plan_skill(skill_name: str, **kwargs) -> Dict[str, Any]:
     return _get_default_client().plan_skill(skill_name, **kwargs)
 
 
-def plan_workflow(goal: str = None, target_output: str = None, max_depth: int = 3) -> Dict[str, Any]:
-    """Build a lightweight workflow plan from skill recommendations and dependency chain data."""
+def plan_workflow(goal: str = None, target_output: str = None, max_depth: int = 3,
+                  skills: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
+    """
+    Plan a multi-step workflow.
+
+    Preferred usage:
+        plan_workflow(skills=[{"name": "gameobject_create", "params": {...}}, ...])
+
+    Backward-compatible fallback:
+        plan_workflow(goal="build player", target_output="scene")
+    """
+    if skills is None and isinstance(goal, list):
+        skills = goal
+        goal = None
+
+    if skills is not None:
+        return _get_default_client().plan_workflow(skills)
+
     result: Dict[str, Any] = {'status': 'plan', 'goal': goal, 'targetOutput': target_output}
     if goal:
         result['recommendations'] = find_skills(goal)
     if target_output:
         result['dependencyChain'] = get_skill_chain(target_output, max_depth=max_depth)
-    result['note'] = 'Workflow planning is currently a client-side composition of recommend + chain results.'
+    result['note'] = 'Pass skills=[...] to call the server-side workflow_plan aggregator.'
     return result
 
 

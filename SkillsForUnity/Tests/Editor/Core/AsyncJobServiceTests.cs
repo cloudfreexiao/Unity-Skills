@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using NUnit.Framework;
 using UnityEngine;
 
@@ -106,6 +108,18 @@ namespace UnitySkills.Tests.Core
         }
 
         [Test]
+        public void CreateJob_SetsInitialProgressStageAndEvent()
+        {
+            var job = AsyncJobService.CreateJob(
+                "test_initial_progress", "queued", "Queued.", true);
+
+            Assert.AreEqual("queued", job.progressStage);
+            Assert.IsNotNull(job.progressEvents);
+            Assert.IsTrue(job.progressEvents.Count > 0);
+            Assert.AreEqual("queued", job.progressEvents[0].stage);
+        }
+
+        [Test]
         public void ProgressEvents_RecordedDuringCompleteJob()
         {
             var job = AsyncJobService.CreateJob(
@@ -188,6 +202,42 @@ namespace UnitySkills.Tests.Core
         {
             var result = AsyncJobService.Get("nonexistent_job_id_12345");
             Assert.IsNull(result);
+        }
+
+        [Test]
+        public void PlayModeReconnectJob_FailsAsUnrecoverable()
+        {
+            var job = AsyncJobService.CreateJob(
+                "test", "queued", "Will fail after reload.", false,
+                metadata: new Dictionary<string, object>
+                {
+                    ["testMode"] = "PlayMode",
+                    ["filter"] = string.Empty
+                },
+                resultData: new Dictionary<string, object>());
+            job.status = "reconnecting";
+            BatchPersistence.UpsertJob(job);
+
+            AsyncJobService.Pump(job.jobId);
+
+            var updated = AsyncJobService.Get(job.jobId);
+            Assert.AreEqual("failed", updated.status);
+            Assert.AreEqual("failed_reload_unrecoverable", updated.currentStage);
+        }
+
+        [Test]
+        public void JobStatus_ReturnsRecentProgressEvents()
+        {
+            var job = AsyncJobService.CreateJob(
+                "test_status", "queued", "Queued.", true);
+            AsyncJobService.CompleteJob(job.jobId, "Done.");
+
+            var response = BatchSkills.JobStatus(job.jobId);
+            var json = JObject.Parse(JsonConvert.SerializeObject(response));
+
+            Assert.IsTrue(json["success"]?.Value<bool>() ?? false);
+            Assert.AreEqual("completed", json["progressStage"]?.ToString());
+            Assert.IsTrue((json["recentProgress"] as JArray)?.Count > 0);
         }
     }
 }
