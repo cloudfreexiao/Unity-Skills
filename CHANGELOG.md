@@ -5,21 +5,21 @@ All notable changes to **UnitySkills** will be documented in this file.
 ## [1.7.0] - 2026-04-15
 
 ### Added
-- **异步 Job 基础设施 `AsyncJobService`** — 新增 `AsyncJobService` 提供统一异步任务框架，支持 Test Runner 集成（通过 `TestRunnerApi`）、Job 状态持久化（JSON）、实时进度推送（`ServerSentEvents`）和 Job 取消能力。Job 状态通过 `BatchPersistence` 自动持久化到 `Library/unity_skills_jobs.json`，服务器重启后自动恢复。
-- **批量处理服务 `BatchJobService`** — 新增 `BatchJobService` 管理所有批量作业的生命周期，包含作业调度、并发控制（`maxConcurrency`）、重试策略（`maxRetries`）、熔断保护（连续失败 → 指数退避）和优先级队列。批量作业通过 `/jobs/*` REST 端点暴露。
-- **Batch Skill 模块** — 新增 21 个 Batch Skill（`batch_query`, `batch_preview`, `batch_execute`, `batch_report`, `batch_cancel`, `job_*` 系列等），支持查询/预览/执行/报告/取消五阶段批量工作流，`batch_execute` 支持 `parallelExecution` 和 `failFast` 选项。
-- **作业模型 `BatchModels.cs` 和持久化 `BatchPersistence.cs`** — 定义 `BatchJobRecord`/`BatchResult`/`BatchError` 等数据模型；`BatchPersistence` 提供 JSON 文件读写、锁机制和进程隔离的 Job 队列管理。
-- **Skill 规划服务 `SkillPlanningService`** — 新增 2300+ 行规划引擎，支持技能链规划（`plan_chain`）、执行计划生成（`plan_generate`）、技能依赖分析（`plan_dependencies`）、技能推荐（`plan_recommend`）和 Dry-Run 模式（`plan_dry_run`）。内置意图解析、同义词匹配、操作类型分类和输出字段索引。
-- **Workflow Skill 模块** — 新增 `workflow_execute`/`workflow_snapshot`/`workflow_rollback` 等技能，支持基于快照的多步操作回滚。
+- **统一异步 Job 基础设施 `AsyncJobService`** — 新增统一 Job 模型，接入 Test Runner、包管理和脚本变更监测。Job 状态、进度事件和日志通过 `BatchPersistence` 持久化到 `Library/UnitySkills/batch_state.json`，Domain Reload 后未完成作业会以 `reconnecting` 状态恢复。
+- **批量处理服务 `BatchJobService`** — 新增批量作业执行器，负责 Batch 预览结果的排队、分块执行、取消、报告生成，以及与 `WorkflowManager` 的会话级联动。
+- **Batch Skill 模块** — 新增 21 个 Batch/Job 相关 Skill，包括 `batch_query_*`、`batch_preview_*`、`batch_execute`、`batch_report_*`、`batch_retry_failed` 以及 `job_status`/`job_logs`/`job_list`/`job_wait`/`job_cancel`，形成查询、预览、执行、报告、重试与状态查询闭环。
+- **作业模型与持久化** — 新增 `BatchModels.cs` 与 `BatchPersistence.cs`，定义批量作业、报告、预览、日志、进度事件等数据结构，并提供 JSON 持久化与 reload 后恢复逻辑。
+- **Skill 规划服务 `SkillPlanningService`** — 新增通用规划引擎，为 Skill 提供参数校验、语义检查、变更预测、风险提示和 `serverAvailability` 预判；HTTP 层新增 `POST /skill/{name}?mode=dryRun` 与 `POST /skill/{name}?mode=plan`。
+- **`workflow_plan` 聚合规划 Skill** — Workflow 模块新增 `workflow_plan`，可对多步 Skill 调用做聚合规划，输出总风险、依赖关系、分步计划与警告信息。
 
 ### Changed
 - **Perception Skill 全面升级** — 新增 7 个场景感知 Skill（`scene_analyze`, `scene_health_check`, `scene_contract_validate`, `scene_component_stats`, `scene_find_hotspots`, `scene_diff`, `project_stack_detect`），现有 Skill 补充 `scene_export_report`、`scene_dependency_analyze`、`scene_context` 等能力，Perception 模块从 11 个 Skill 扩展到 18 个。
-- **SkillRouter 增强** — `UnitySkillAttribute` 新增 `Risk`（none/low/medium/high/critical）和 `Impact`（minor/moderate/significant）元数据；SkillRouter 初始化时构建输出索引、意图同义词表和技能依赖图；新增规划路由（`/skills/plan`）和 Dry-Run 端点。
+- **SkillRouter 增强** — `UnitySkillAttribute` 新增 `MutatesScene`、`MutatesAssets`、`MayTriggerReload`、`RiskLevel`、`RequiresPackages` 元数据；SkillRouter 初始化时构建输出索引并扩展中英文意图同义词表；新增 `DryRun`/`Plan` 请求模式。
 - **技能文档规范化** — 14 个 SKILL.md 模块文档新增标准参数表（参数名/类型/必选/默认值/描述）和 Canonical Signature 块，所有 Skill 参数与 C# 方法签名完全一致。
 - **Skill 数量提升** — 总计从 513 提升到 542（+29 个），功能模块从 40 个增加到 41 个（新增 Batch），Advisory 模块从 14 个调整为 13 个（移除 XR advisory，其内容合并到 xr/SKILL.md）。
 
 ### Fixed
-- **Batch 作业并发竞争** — `BatchJobService` 使用 `lock (_jobLock)` 保护作业队列操作，避免并发场景下的竞态条件。
+- **Batch 作业恢复与状态一致性** — `BatchPersistence` 会在 Domain Reload 后将未终态 Job 规范化为 `reconnecting`，避免批量任务在重载后丢失执行状态。
 - **Test Runner 回调泄漏** — `AsyncJobService` 在 Job 完成后显式 `UnregisterCallbacksFromObject`，防止回调对象泄漏导致内存占用持续增长。
 - **Skill 路由中文匹配** — `SkillRouter` 新增中文同义词表，确保"创建方块"等中文自然语言能正确路由到 `gameobject_create`。
 
