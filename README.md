@@ -195,7 +195,7 @@ If you're using other tools that support Skills, install according to the Skills
 | **Debug** | 10 | Error logs/Compile check/Stack trace/Assemblies/Define symbols/Memory info |
 | **Event** | 10 | UnityEvent listener management/Batch add/Copy/State control/List |
 | **Smart** | 10 | Scene SQL query/Spatial query/Auto layout/Snap to ground/Grid snap/Randomize/Replace |
-| **Test** | 10 | Test run/Run by name/Categories/Template create/Summary statistics |
+| **Test** | 11 | Test run/Run by name/Categories/Template create/Summary statistics |
 | **Prefab** | 11 | Create/Instantiate/Override apply & revert/Batch instantiate/Variants/Find instances/Asset property editing |
 | **Component** | 10 | Add/Remove/Property config/Batch operations/Copy/Enable-Disable |
 | **Optimization** | 10 | Texture compression/Mesh compression/Audio compression/Scene analysis/Static flags/LOD/Duplicate materials/Overdraw |

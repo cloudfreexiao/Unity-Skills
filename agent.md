@@ -63,7 +63,7 @@ Unity-Skills/
 │   └── unity-skills~/                  # AI Skill 模板 (波浪线隐藏, 随包分发)
 │       ├── SKILL.md                    # 主 Skill 文档 (AI 读取入口)
 │       ├── scripts/unity_skills.py     # Python 客户端
-│       ├── skills/                     # 53 个模块文档 (40 functional + 13 advisory)
+│       ├── skills/                     # 54 个模块文档 (41 functional + 13 advisory)
 │       └── references/                 # Unity 开发参考
 ├── .claude/commands/                   # 自定义命令
 │   ├── updateversion.md                # /updateversion — 版本号更新 + CHANGELOG 生成
@@ -113,7 +113,7 @@ public static object SkillName(string name, float x = 0) { ... }
 | Model | 10 | Component | 10 | Terrain | 10 |
 | NavMesh | 10 | Cleaner | 10 | ScriptableObject | 10 |
 | Console | 10 | Debug | 10 | Event | 10 |
-| Smart | 10 | Test | 10 | Optimization | 10 |
+| Smart | 10 | Test | 11 | Optimization | 10 |
 | Profiler | 10 | Light | 10 | Validation | 10 |
 | Animator | 10 | Sample | 8 | | |
 
