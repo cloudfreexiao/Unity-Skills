@@ -2,6 +2,7 @@ using UnityEngine;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Object = UnityEngine.Object;
 
 #if CINEMACHINE_3
 using Unity.Cinemachine;
@@ -157,22 +158,77 @@ namespace UnitySkills
         {
 #if CINEMACHINE_3
             { "OrbitalFollow", "CinemachineOrbitalFollow" },
-            { "Transposer", "CinemachineTransposer" },
-            { "Composer", "CinemachineComposer" },
+            { "Follow", "CinemachineFollow" },
+            { "Transposer", "CinemachineFollow" },
+            { "Composer", "CinemachineRotationComposer" },
+            { "RotationComposer", "CinemachineRotationComposer" },
+            { "PositionComposer", "CinemachinePositionComposer" },
+            { "FramingTransposer", "CinemachinePositionComposer" },
             { "PanTilt", "CinemachinePanTilt" },
+            { "POV", "CinemachinePanTilt" },
             { "SameAsFollow", "CinemachineSameAsFollowTarget" },
+            { "RotateWithFollow", "CinemachineRotateWithFollowTarget" },
             { "HardLockToTarget", "CinemachineHardLockToTarget" },
+            { "HardLookAt", "CinemachineHardLookAt" },
             { "Perlin", "CinemachineBasicMultiChannelPerlin" },
-            { "Impulse", "CinemachineImpulseSource" }
+            { "Noise", "CinemachineBasicMultiChannelPerlin" },
+            { "Impulse", "CinemachineImpulseSource" },
+            { "ImpulseListener", "CinemachineImpulseListener" },
+            { "ThirdPersonFollow", "CinemachineThirdPersonFollow" },
+            { "3rdPersonFollow", "CinemachineThirdPersonFollow" },
+            { "SplineDolly", "CinemachineSplineDolly" },
+            { "TrackedDolly", "CinemachineSplineDolly" },
+            { "Confiner", "CinemachineConfiner3D" },
+            { "Confiner2D", "CinemachineConfiner2D" },
+            { "Confiner3D", "CinemachineConfiner3D" },
+            { "Deoccluder", "CinemachineDeoccluder" },
+            { "Collider", "CinemachineDeoccluder" },
+            { "Decollider", "CinemachineDecollider" },
+            { "FollowZoom", "CinemachineFollowZoom" },
+            { "GroupFraming", "CinemachineGroupFraming" },
+            { "GroupComposer", "CinemachineGroupFraming" },
+            { "FreeLookModifier", "CinemachineFreeLookModifier" },
+            { "Recomposer", "CinemachineRecomposer" },
+            { "Storyboard", "CinemachineStoryboard" },
+            { "ThirdPersonAim", "CinemachineThirdPersonAim" },
+            { "AutoFocus", "CinemachineAutoFocus" },
+            { "Sequencer", "CinemachineSequencerCamera" },
+            { "BlendList", "CinemachineSequencerCamera" }
 #else
             { "Transposer", "CinemachineTransposer" },
+            { "Follow", "CinemachineTransposer" },
             { "Composer", "CinemachineComposer" },
+            { "RotationComposer", "CinemachineComposer" },
             { "FramingTransposer", "CinemachineFramingTransposer" },
+            { "PositionComposer", "CinemachineFramingTransposer" },
             { "HardLockToTarget", "CinemachineHardLockToTarget" },
+            { "HardLookAt", "CinemachineHardLookAt" },
             { "Perlin", "CinemachineBasicMultiChannelPerlin" },
+            { "Noise", "CinemachineBasicMultiChannelPerlin" },
             { "Impulse", "CinemachineImpulseSource" },
+            { "ImpulseListener", "CinemachineImpulseListener" },
             { "POV", "CinemachinePOV" },
-            { "OrbitalTransposer", "CinemachineOrbitalTransposer" }
+            { "PanTilt", "CinemachinePOV" },
+            { "OrbitalTransposer", "CinemachineOrbitalTransposer" },
+            { "OrbitalFollow", "CinemachineOrbitalTransposer" },
+            { "3rdPersonFollow", "Cinemachine3rdPersonFollow" },
+            { "ThirdPersonFollow", "Cinemachine3rdPersonFollow" },
+            { "TrackedDolly", "CinemachineTrackedDolly" },
+            { "SplineDolly", "CinemachineTrackedDolly" },
+            { "SameAsFollow", "CinemachineSameAsFollowTarget" },
+            { "RotateWithFollow", "CinemachineSameAsFollowTarget" },
+            { "Confiner", "CinemachineConfiner" },
+            { "Confiner2D", "CinemachineConfiner2D" },
+            { "Confiner3D", "CinemachineConfiner" },
+            { "Collider", "CinemachineCollider" },
+            { "Deoccluder", "CinemachineCollider" },
+            { "FollowZoom", "CinemachineFollowZoom" },
+            { "GroupComposer", "CinemachineGroupComposer" },
+            { "Recomposer", "CinemachineRecomposer" },
+            { "Storyboard", "CinemachineStoryboard" },
+            { "FreeLook", "CinemachineFreeLook" },
+            { "BlendList", "CinemachineBlendListCamera" },
+            { "Sequencer", "CinemachineBlendListCamera" }
 #endif
         };
 
@@ -214,6 +270,142 @@ namespace UnitySkills
             return max;
         }
 
+        // ===================== Brain Write =====================
+
+        public static CinemachineBrain FindBrain()
+        {
+            var mainCam = Camera.main;
+            if (mainCam != null)
+            {
+                var brain = mainCam.GetComponent<CinemachineBrain>();
+                if (brain != null) return brain;
+            }
+            return Object.FindAnyObjectByType<CinemachineBrain>();
+        }
+
+        public static void SetBrainUpdateMethod(CinemachineBrain brain, string method)
+        {
+#if CINEMACHINE_3
+            if (System.Enum.TryParse<CinemachineBrain.UpdateMethods>(method, true, out var v))
+                brain.UpdateMethod = v;
+#else
+            if (System.Enum.TryParse<CinemachineBrain.UpdateMethod>(method, true, out var v))
+                brain.m_UpdateMethod = v;
+#endif
+        }
+
+        public static void SetBrainBlendUpdateMethod(CinemachineBrain brain, string method)
+        {
+#if CINEMACHINE_3
+            if (System.Enum.TryParse<CinemachineBrain.BrainUpdateMethods>(method, true, out var v))
+                brain.BlendUpdateMethod = v;
+#else
+            if (System.Enum.TryParse<CinemachineBrain.BrainUpdateMethod>(method, true, out var v))
+                brain.m_BlendUpdateMethod = v;
+#endif
+        }
+
+        public static string GetBrainBlendUpdateMethod(CinemachineBrain brain)
+        {
+#if CINEMACHINE_3
+            return brain.BlendUpdateMethod.ToString();
+#else
+            return brain.m_BlendUpdateMethod.ToString();
+#endif
+        }
+
+        public static bool GetBrainBool(CinemachineBrain brain, string propName)
+        {
+#if CINEMACHINE_3
+            switch (propName)
+            {
+                case "ShowDebugText": return brain.ShowDebugText;
+                case "ShowCameraFrustum": return brain.ShowCameraFrustum;
+                case "IgnoreTimeScale": return brain.IgnoreTimeScale;
+            }
+#else
+            switch (propName)
+            {
+                case "ShowDebugText": return brain.m_ShowDebugText;
+                case "ShowCameraFrustum": return brain.m_ShowCameraFrustum;
+                case "IgnoreTimeScale": return brain.m_IgnoreTimeScale;
+            }
+#endif
+            return false;
+        }
+
+        public static void SetBrainBool(CinemachineBrain brain, string propName, bool value)
+        {
+#if CINEMACHINE_3
+            switch (propName)
+            {
+                case "ShowDebugText": brain.ShowDebugText = value; break;
+                case "ShowCameraFrustum": brain.ShowCameraFrustum = value; break;
+                case "IgnoreTimeScale": brain.IgnoreTimeScale = value; break;
+            }
+#else
+            switch (propName)
+            {
+                case "ShowDebugText": brain.m_ShowDebugText = value; break;
+                case "ShowCameraFrustum": brain.m_ShowCameraFrustum = value; break;
+                case "IgnoreTimeScale": brain.m_IgnoreTimeScale = value; break;
+            }
+#endif
+        }
+
+        // ===================== Blend Definition =====================
+
+        public static CinemachineBlendDefinition GetBrainDefaultBlend(CinemachineBrain brain)
+        {
+#if CINEMACHINE_3
+            return brain.DefaultBlend;
+#else
+            return brain.m_DefaultBlend;
+#endif
+        }
+
+        public static void SetBrainDefaultBlend(CinemachineBrain brain, CinemachineBlendDefinition blend)
+        {
+#if CINEMACHINE_3
+            brain.DefaultBlend = blend;
+#else
+            brain.m_DefaultBlend = blend;
+#endif
+        }
+
+        public static string GetBlendStyle(CinemachineBlendDefinition blend)
+        {
+#if CINEMACHINE_3
+            return blend.Style.ToString();
+#else
+            return blend.m_Style.ToString();
+#endif
+        }
+
+        public static float GetBlendTime(CinemachineBlendDefinition blend)
+        {
+#if CINEMACHINE_3
+            return blend.Time;
+#else
+            return blend.m_Time;
+#endif
+        }
+
+        public static CinemachineBlendDefinition CreateBlendDefinition(string style, float time)
+        {
+            var blend = new CinemachineBlendDefinition();
+#if CINEMACHINE_3
+            if (System.Enum.TryParse<CinemachineBlendDefinition.Styles>(style, true, out var s))
+                blend.Style = s;
+            blend.Time = time;
+#else
+            if (System.Enum.TryParse<CinemachineBlendDefinition.Style>(style, true, out var s))
+                blend.m_Style = s;
+            blend.m_Time = time;
+#endif
+            return blend;
+        }
+
         // ===================== StateDriven Instruction =====================
 
         public static void AddStateDrivenInstruction(
@@ -245,6 +437,125 @@ namespace UnitySkills
             });
             stateCam.m_Instructions = list.ToArray();
 #endif
+        }
+
+        // ===================== Sequencer =====================
+
+#if CINEMACHINE_3
+        public const string SequencerTypeName = "CinemachineSequencerCamera";
+#else
+        public const string SequencerTypeName = "CinemachineBlendListCamera";
+#endif
+
+        public static MonoBehaviour GetSequencer(GameObject go)
+        {
+#if CINEMACHINE_3
+            return go.GetComponent<CinemachineSequencerCamera>();
+#else
+            return go.GetComponent<CinemachineBlendListCamera>();
+#endif
+        }
+
+        public static void SetSequencerLoop(MonoBehaviour seq, bool loop)
+        {
+#if CINEMACHINE_3
+            ((CinemachineSequencerCamera)seq).Loop = loop;
+#else
+            ((CinemachineBlendListCamera)seq).m_Loop = loop;
+#endif
+        }
+
+        public static bool GetSequencerLoop(MonoBehaviour seq)
+        {
+#if CINEMACHINE_3
+            return ((CinemachineSequencerCamera)seq).Loop;
+#else
+            return ((CinemachineBlendListCamera)seq).m_Loop;
+#endif
+        }
+
+        public static void AddSequencerInstruction(
+            MonoBehaviour seq,
+            CinemachineVirtualCameraBase childVcam,
+            float hold,
+            CinemachineBlendDefinition blend)
+        {
+#if CINEMACHINE_3
+            var seqCam = (CinemachineSequencerCamera)seq;
+            if (seqCam.Instructions == null) seqCam.Instructions = new List<CinemachineSequencerCamera.Instruction>();
+            seqCam.Instructions.Add(new CinemachineSequencerCamera.Instruction
+            {
+                Camera = childVcam,
+                Hold = hold,
+                Blend = blend
+            });
+#else
+            var blendList = (CinemachineBlendListCamera)seq;
+            var list = new List<CinemachineBlendListCamera.Instruction>();
+            if (blendList.m_Instructions != null) list.AddRange(blendList.m_Instructions);
+            list.Add(new CinemachineBlendListCamera.Instruction
+            {
+                m_VirtualCamera = childVcam,
+                m_Hold = hold,
+                m_Blend = blend
+            });
+            blendList.m_Instructions = list.ToArray();
+#endif
+        }
+
+        public static int GetSequencerInstructionCount(MonoBehaviour seq)
+        {
+#if CINEMACHINE_3
+            var s = ((CinemachineSequencerCamera)seq).Instructions;
+            return s?.Count ?? 0;
+#else
+            var s = ((CinemachineBlendListCamera)seq).m_Instructions;
+            return s?.Length ?? 0;
+#endif
+        }
+
+        // ===================== FreeLook =====================
+
+        public static GameObject CreateFreeLook(string name)
+        {
+            var go = new GameObject(name);
+#if CINEMACHINE_3
+            var cam = go.AddComponent<CinemachineCamera>();
+            cam.Priority = new PrioritySettings { Enabled = true, Value = 10 };
+            var orbital = go.AddComponent<CinemachineOrbitalFollow>();
+            orbital.OrbitStyle = CinemachineOrbitalFollow.OrbitStyles.ThreeRing;
+            go.AddComponent<CinemachineRotationComposer>();
+#else
+            go.AddComponent<CinemachineFreeLook>();
+#endif
+            return go;
+        }
+
+        // ===================== Body / Aim Component Detection =====================
+
+        private static readonly HashSet<string> BodyTypes = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "CinemachineFollow", "CinemachineOrbitalFollow", "CinemachineThirdPersonFollow",
+            "CinemachinePositionComposer", "CinemachineSplineDolly", "CinemachineHardLockToTarget",
+            // CM2
+            "CinemachineTransposer", "CinemachineFramingTransposer", "CinemachineOrbitalTransposer",
+            "Cinemachine3rdPersonFollow", "CinemachineTrackedDolly"
+        };
+
+        private static readonly HashSet<string> AimTypes = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "CinemachineRotationComposer", "CinemachinePanTilt", "CinemachineHardLookAt",
+            "CinemachineRotateWithFollowTarget", "CinemachineSplineDollyLookAtTargets",
+            // CM2
+            "CinemachineComposer", "CinemachineGroupComposer", "CinemachinePOV",
+            "CinemachineSameAsFollowTarget"
+        };
+
+        public static MonoBehaviour GetPipelineComponent(GameObject go, string stage)
+        {
+            var comps = go.GetComponents<MonoBehaviour>();
+            var set = stage == "Body" ? BodyTypes : AimTypes;
+            return comps.FirstOrDefault(c => c != null && set.Contains(c.GetType().Name));
         }
     }
 #endif

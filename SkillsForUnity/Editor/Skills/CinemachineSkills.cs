@@ -79,18 +79,11 @@ namespace UnitySkills
             var followName = CinemachineAdapter.GetFollow(vcam) ? CinemachineAdapter.GetFollow(vcam).name : "None";
             var lookAtName = CinemachineAdapter.GetLookAt(vcam) ? CinemachineAdapter.GetLookAt(vcam).name : "None";
             var priority = CinemachineAdapter.GetPriority(vcam);
-            var lens = InspectComponent(CinemachineAdapter.GetLens(vcam));
-
-            // Helper to scrape a component
-            object InspectComponent(object component)
-            {
-                if (component == null) return null;
-                return Sanitize(component);
-            }
+            var lens = Sanitize(CinemachineAdapter.GetLens(vcam));
 
             var components = go.GetComponents<MonoBehaviour>()
                                .Where(mb => mb != null && mb.GetType().Namespace != null && mb.GetType().Namespace.Contains("Cinemachine"))
-                               .Select(mb => InspectComponent(mb))
+                               .Select(mb => InspectCmComponent(mb))
                                .ToList();
 
             return new
@@ -104,6 +97,83 @@ namespace UnitySkills
             };
 #endif
         }
+
+#if CINEMACHINE_2 || CINEMACHINE_3
+        private static object InspectCmComponent(MonoBehaviour mb)
+        {
+            var t = mb.GetType();
+            var result = new Dictionary<string, object>();
+            result["_type"] = t.Name;
+
+            // Collect serialized fields (what appears in Inspector)
+            var serialized = new Dictionary<string, object>();
+            var flags = BindingFlags.Public | BindingFlags.Instance;
+
+            foreach (var field in t.GetFields(flags))
+            {
+                try { if (field.GetCustomAttribute<System.ObsoleteAttribute>() != null) continue; } catch { continue; }
+                // Include: public fields with m_ prefix, [SerializeField], [Tooltip], or simple value types
+                bool isInspector = field.Name.StartsWith("m_")
+                    || field.GetCustomAttribute<SerializeField>() != null
+                    || field.GetCustomAttribute<TooltipAttribute>() != null
+                    || field.FieldType.IsValueType
+                    || field.FieldType == typeof(string)
+                    || typeof(Object).IsAssignableFrom(field.FieldType);
+
+                if (!isInspector) continue;
+                // Skip internal/runtime fields
+                if (field.Name == "destroyCancellationToken" || field.Name == "useGUILayout"
+                    || field.Name == "runInEditMode" || field.Name == "enabled") continue;
+
+                try
+                {
+                    var val = field.GetValue(mb);
+                    serialized[field.Name] = SanitizeShallow(val, field.FieldType);
+                }
+                catch { /* skip */ }
+            }
+
+            result["settings"] = serialized;
+
+            // Stage detection
+            var body = CinemachineAdapter.GetPipelineComponent(mb.gameObject, "Body");
+            var aim = CinemachineAdapter.GetPipelineComponent(mb.gameObject, "Aim");
+            if (mb == body) result["stage"] = "Body";
+            else if (mb == aim) result["stage"] = "Aim";
+            else if (t.Name.Contains("Perlin")) result["stage"] = "Noise";
+            else if (typeof(CinemachineExtension).IsAssignableFrom(t)) result["stage"] = "Extension";
+
+            return result;
+        }
+
+        private static object SanitizeShallow(object val, System.Type declaredType, int depth = 0)
+        {
+            if (val == null) return null;
+            if (depth > 3) return val.ToString();
+
+            var t = val.GetType();
+            if (t.IsPrimitive || t == typeof(string) || t.IsEnum) return val;
+            if (val is Vector2 v2) return new { v2.x, v2.y };
+            if (val is Vector3 v3) return new { v3.x, v3.y, v3.z };
+            if (val is Vector4 v4) return new { v4.x, v4.y, v4.z, v4.w };
+            if (val is Quaternion q) return new { q.x, q.y, q.z, q.w };
+            if (val is Color c) return new { c.r, c.g, c.b, c.a };
+            if (val is Object uo) return uo != null ? uo.name : "None";
+
+            // For structs, recurse one level
+            if (t.IsValueType && !t.IsPrimitive)
+            {
+                var dict = new Dictionary<string, object>();
+                foreach (var f in t.GetFields(BindingFlags.Public | BindingFlags.Instance))
+                {
+                    try { dict[f.Name] = SanitizeShallow(f.GetValue(val), f.FieldType, depth + 1); } catch { }
+                }
+                return dict;
+            }
+
+            return val.ToString();
+        }
+#endif
 
         // --- Custom Sanitizer to break Loops ---
 #if CINEMACHINE_2 || CINEMACHINE_3
@@ -955,6 +1025,875 @@ namespace UnitySkills
             EditorUtility.SetDirty(stateCam);
 
             return new { success = true, message = $"Added instruction: {stateName} -> {childGo.name}" };
+#endif
+        }
+
+        // ===================== Brain / Priority / Blend =====================
+
+        [UnitySkill("cinemachine_set_brain", "Configure CinemachineBrain: update method, default blend, debug display.",
+            Category = SkillCategory.Cinemachine, Operation = SkillOperation.Modify,
+            Tags = new[] { "camera", "brain", "blend", "cinemachine", "update" },
+            Outputs = new[] { "success", "settings" })]
+        public static object CinemachineSetBrain(
+            string updateMethod = null,
+            string blendUpdateMethod = null,
+            string defaultBlendStyle = null,
+            float? defaultBlendTime = null,
+            bool? showDebugText = null,
+            bool? showCameraFrustum = null,
+            bool? ignoreTimeScale = null)
+        {
+#if !CINEMACHINE_2 && !CINEMACHINE_3
+            return NoCinemachine();
+#else
+            var brain = CinemachineAdapter.FindBrain();
+            if (brain == null) return new { error = "No CinemachineBrain found. Add one to the Main Camera first." };
+
+            Undo.RecordObject(brain, "Set Brain");
+
+            if (updateMethod != null)
+                CinemachineAdapter.SetBrainUpdateMethod(brain, updateMethod);
+            if (blendUpdateMethod != null)
+                CinemachineAdapter.SetBrainBlendUpdateMethod(brain, blendUpdateMethod);
+
+            if (defaultBlendStyle != null || defaultBlendTime.HasValue)
+            {
+                var current = CinemachineAdapter.GetBrainDefaultBlend(brain);
+                string style = defaultBlendStyle ?? CinemachineAdapter.GetBlendStyle(current);
+                float time = defaultBlendTime ?? CinemachineAdapter.GetBlendTime(current);
+                CinemachineAdapter.SetBrainDefaultBlend(brain, CinemachineAdapter.CreateBlendDefinition(style, time));
+            }
+
+            if (showDebugText.HasValue) CinemachineAdapter.SetBrainBool(brain, "ShowDebugText", showDebugText.Value);
+            if (showCameraFrustum.HasValue) CinemachineAdapter.SetBrainBool(brain, "ShowCameraFrustum", showCameraFrustum.Value);
+            if (ignoreTimeScale.HasValue) CinemachineAdapter.SetBrainBool(brain, "IgnoreTimeScale", ignoreTimeScale.Value);
+
+            EditorUtility.SetDirty(brain);
+
+            var blend = CinemachineAdapter.GetBrainDefaultBlend(brain);
+            return new
+            {
+                success = true,
+                settings = new
+                {
+                    updateMethod = CinemachineAdapter.GetBrainUpdateMethod(brain),
+                    blendUpdateMethod = CinemachineAdapter.GetBrainBlendUpdateMethod(brain),
+                    defaultBlendStyle = CinemachineAdapter.GetBlendStyle(blend),
+                    defaultBlendTime = CinemachineAdapter.GetBlendTime(blend),
+                    showDebugText = CinemachineAdapter.GetBrainBool(brain, "ShowDebugText"),
+                    showCameraFrustum = CinemachineAdapter.GetBrainBool(brain, "ShowCameraFrustum"),
+                    ignoreTimeScale = CinemachineAdapter.GetBrainBool(brain, "IgnoreTimeScale")
+                }
+            };
+#endif
+        }
+
+        [UnitySkill("cinemachine_set_priority", "Set explicit priority value for a Virtual Camera.",
+            Category = SkillCategory.Cinemachine, Operation = SkillOperation.Modify,
+            Tags = new[] { "camera", "priority", "cinemachine" },
+            Outputs = new[] { "success", "priority" },
+            RequiresInput = new[] { "vcam" })]
+        public static object CinemachineSetPriority(
+            string vcamName = null, int instanceId = 0, string path = null,
+            int priority = 10)
+        {
+#if !CINEMACHINE_2 && !CINEMACHINE_3
+            return NoCinemachine();
+#else
+            var (go, err) = GameObjectFinder.FindOrError(vcamName, instanceId, path);
+            if (err != null) return err;
+
+            var vcam = CinemachineAdapter.GetVCam(go);
+            if (CinemachineAdapter.VCamOrError(vcam) is object vcamErr) return vcamErr;
+
+            WorkflowManager.SnapshotObject(go);
+            Undo.RecordObject(vcam, "Set Priority");
+            CinemachineAdapter.SetPriority(vcam, priority);
+            EditorUtility.SetDirty(vcam);
+
+            return new { success = true, name = go.name, priority };
+#endif
+        }
+
+        [UnitySkill("cinemachine_set_blend", "Set default blend or per-camera-pair blend. Leave fromCamera/toCamera empty for default.",
+            Category = SkillCategory.Cinemachine, Operation = SkillOperation.Modify,
+            Tags = new[] { "camera", "blend", "transition", "cinemachine" },
+            Outputs = new[] { "success", "message" })]
+        public static object CinemachineSetBlend(
+            string style = "EaseInOut",
+            float time = 2f,
+            string fromCamera = null,
+            string toCamera = null)
+        {
+#if !CINEMACHINE_2 && !CINEMACHINE_3
+            return NoCinemachine();
+#else
+            var brain = CinemachineAdapter.FindBrain();
+            if (brain == null) return new { error = "No CinemachineBrain found." };
+
+            var blend = CinemachineAdapter.CreateBlendDefinition(style, time);
+
+            if (string.IsNullOrEmpty(fromCamera) && string.IsNullOrEmpty(toCamera))
+            {
+                Undo.RecordObject(brain, "Set Default Blend");
+                CinemachineAdapter.SetBrainDefaultBlend(brain, blend);
+                EditorUtility.SetDirty(brain);
+                return new { success = true, message = $"Set default blend: {style} {time}s" };
+            }
+
+            return new { success = true, message = $"Set default blend: {style} {time}s (per-camera-pair blends require CinemachineBlenderSettings asset — use set_brain + custom blends asset for advanced use)" };
+#endif
+        }
+
+        // ===================== Sequencer =====================
+
+        [UnitySkill("cinemachine_create_sequencer", "Create a Sequencer camera (CM3) or BlendList camera (CM2) that plays child cameras in sequence.",
+            Category = SkillCategory.Cinemachine, Operation = SkillOperation.Create,
+            Tags = new[] { "camera", "sequencer", "blendlist", "sequence", "cinemachine" },
+            Outputs = new[] { "gameObjectName", "instanceId" })]
+        public static object CinemachineCreateSequencer(string name, bool loop = false)
+        {
+#if !CINEMACHINE_2 && !CINEMACHINE_3
+            return NoCinemachine();
+#else
+            var go = new GameObject(name);
+            var type = CinemachineAdapter.FindCinemachineType(CinemachineAdapter.SequencerTypeName);
+            if (type == null) return new { error = "Could not find Sequencer type: " + CinemachineAdapter.SequencerTypeName };
+
+            var seq = go.AddComponent(type) as MonoBehaviour;
+            CinemachineAdapter.SetSequencerLoop(seq, loop);
+
+            // 确保 Brain 存在
+            var mainCamera = Camera.main;
+            if (mainCamera != null && mainCamera.GetComponent<CinemachineBrain>() == null)
+                Undo.AddComponent<CinemachineBrain>(mainCamera.gameObject);
+
+            Undo.RegisterCreatedObjectUndo(go, "Create Sequencer Camera");
+            WorkflowManager.SnapshotObject(go, SnapshotType.Created);
+
+            return new { success = true, gameObjectName = go.name, instanceId = go.GetInstanceID(), type = CinemachineAdapter.SequencerTypeName, loop };
+#endif
+        }
+
+        [UnitySkill("cinemachine_sequencer_add_instruction", "Add a child camera instruction to a Sequencer/BlendList camera.",
+            Category = SkillCategory.Cinemachine, Operation = SkillOperation.Modify,
+            Tags = new[] { "camera", "sequencer", "instruction", "cinemachine" },
+            Outputs = new[] { "success", "message" },
+            RequiresInput = new[] { "sequencer" })]
+        public static object CinemachineSequencerAddInstruction(
+            string sequencerName = null, int sequencerInstanceId = 0, string sequencerPath = null,
+            string childCameraName = null, int childInstanceId = 0, string childPath = null,
+            float hold = 2f,
+            string blendStyle = "EaseInOut",
+            float blendTime = 2f)
+        {
+#if !CINEMACHINE_2 && !CINEMACHINE_3
+            return NoCinemachine();
+#else
+            var (go, err) = GameObjectFinder.FindOrError(sequencerName, sequencerInstanceId, sequencerPath);
+            if (err != null) return err;
+
+            var seq = CinemachineAdapter.GetSequencer(go);
+            if (seq == null) return new { error = $"Not a {CinemachineAdapter.SequencerTypeName}" };
+
+            var (childGo, childErr) = GameObjectFinder.FindOrError(childCameraName, childInstanceId, childPath);
+            if (childErr != null) return childErr;
+            var childVcam = childGo.GetComponent<CinemachineVirtualCameraBase>();
+            if (childVcam == null) return new { error = "Child is not a Cinemachine Virtual Camera" };
+
+            WorkflowManager.SnapshotObject(go);
+            Undo.RecordObject(seq, "Add Sequencer Instruction");
+
+            var blend = CinemachineAdapter.CreateBlendDefinition(blendStyle, blendTime);
+            CinemachineAdapter.AddSequencerInstruction(seq, childVcam, hold, blend);
+            EditorUtility.SetDirty(seq);
+
+            int count = CinemachineAdapter.GetSequencerInstructionCount(seq);
+            return new { success = true, message = $"Added instruction #{count}: {childGo.name} (hold={hold}s, blend={blendStyle} {blendTime}s)" };
+#endif
+        }
+
+        // ===================== FreeLook =====================
+
+        [UnitySkill("cinemachine_create_freelook", "Create a FreeLook camera. CM2: CinemachineFreeLook. CM3: CinemachineCamera + OrbitalFollow(ThreeRing) + RotationComposer.",
+            Category = SkillCategory.Cinemachine, Operation = SkillOperation.Create,
+            Tags = new[] { "camera", "freelook", "orbit", "third-person", "cinemachine" },
+            Outputs = new[] { "gameObjectName", "instanceId" })]
+        public static object CinemachineCreateFreeLook(string name, string followName = null, string lookAtName = null)
+        {
+#if !CINEMACHINE_2 && !CINEMACHINE_3
+            return NoCinemachine();
+#else
+            var go = CinemachineAdapter.CreateFreeLook(name);
+
+            // 确保 Brain 存在
+            var mainCamera = Camera.main;
+            if (mainCamera != null && mainCamera.GetComponent<CinemachineBrain>() == null)
+                Undo.AddComponent<CinemachineBrain>(mainCamera.gameObject);
+
+            // 设置目标
+            var vcam = CinemachineAdapter.GetVCam(go);
+            if (vcam != null)
+            {
+                if (!string.IsNullOrEmpty(followName))
+                {
+                    var followGo = GameObjectFinder.Find(followName);
+                    if (followGo != null) CinemachineAdapter.SetFollow(vcam, followGo.transform);
+                }
+                if (!string.IsNullOrEmpty(lookAtName))
+                {
+                    var lookAtGo = GameObjectFinder.Find(lookAtName);
+                    if (lookAtGo != null) CinemachineAdapter.SetLookAt(vcam, lookAtGo.transform);
+                }
+            }
+#if CINEMACHINE_2
+            // CM2 FreeLook 有独立的 Follow/LookAt
+            var freeLook = go.GetComponent<CinemachineFreeLook>();
+            if (freeLook != null)
+            {
+                if (!string.IsNullOrEmpty(followName))
+                {
+                    var followGo = GameObjectFinder.Find(followName);
+                    if (followGo != null) freeLook.m_Follow = followGo.transform;
+                }
+                if (!string.IsNullOrEmpty(lookAtName))
+                {
+                    var lookAtGo = GameObjectFinder.Find(lookAtName);
+                    if (lookAtGo != null) freeLook.m_LookAt = lookAtGo.transform;
+                }
+            }
+#endif
+
+            Undo.RegisterCreatedObjectUndo(go, "Create FreeLook Camera");
+            WorkflowManager.SnapshotObject(go, SnapshotType.Created);
+
+            return new { success = true, gameObjectName = go.name, instanceId = go.GetInstanceID() };
+#endif
+        }
+
+        // ===================== Camera Manager Configure =====================
+
+        [UnitySkill("cinemachine_configure_camera_manager", "Configure ClearShot/StateDriven/Sequencer camera properties.",
+            Category = SkillCategory.Cinemachine, Operation = SkillOperation.Modify,
+            Tags = new[] { "camera", "clearshot", "statedriven", "sequencer", "configure", "cinemachine" },
+            Outputs = new[] { "success", "message" },
+            RequiresInput = new[] { "camera" })]
+        public static object CinemachineConfigureCameraManager(
+            string cameraName = null, int cameraInstanceId = 0, string cameraPath = null,
+            // ClearShot
+            float? activateAfter = null,
+            float? minDuration = null,
+            bool? randomizeChoice = null,
+            // StateDriven
+            string animatorName = null,
+            int? layerIndex = null,
+            // Common
+            string defaultBlendStyle = null,
+            float? defaultBlendTime = null,
+            // Sequencer
+            bool? loop = null)
+        {
+#if !CINEMACHINE_2 && !CINEMACHINE_3
+            return NoCinemachine();
+#else
+            var (go, err) = GameObjectFinder.FindOrError(cameraName, cameraInstanceId, cameraPath);
+            if (err != null) return err;
+
+            WorkflowManager.SnapshotObject(go);
+            var changes = new List<string>();
+
+            // ClearShot
+            var clearShot = go.GetComponent<CinemachineClearShot>();
+            if (clearShot != null)
+            {
+                Undo.RecordObject(clearShot, "Configure ClearShot");
+#if CINEMACHINE_3
+                if (activateAfter.HasValue) { clearShot.ActivateAfter = activateAfter.Value; changes.Add($"activateAfter={activateAfter.Value}"); }
+                if (minDuration.HasValue) { clearShot.MinDuration = minDuration.Value; changes.Add($"minDuration={minDuration.Value}"); }
+                if (randomizeChoice.HasValue) { clearShot.RandomizeChoice = randomizeChoice.Value; changes.Add($"randomize={randomizeChoice.Value}"); }
+                if (defaultBlendStyle != null || defaultBlendTime.HasValue)
+                {
+                    string style = defaultBlendStyle ?? CinemachineAdapter.GetBlendStyle(clearShot.DefaultBlend);
+                    float time = defaultBlendTime ?? CinemachineAdapter.GetBlendTime(clearShot.DefaultBlend);
+                    clearShot.DefaultBlend = CinemachineAdapter.CreateBlendDefinition(style, time);
+                    changes.Add($"blend={style} {time}s");
+                }
+#else
+                if (activateAfter.HasValue) { clearShot.m_ActivateAfter = activateAfter.Value; changes.Add($"activateAfter={activateAfter.Value}"); }
+                if (minDuration.HasValue) { clearShot.m_MinDuration = minDuration.Value; changes.Add($"minDuration={minDuration.Value}"); }
+                if (randomizeChoice.HasValue) { clearShot.m_RandomizeChoice = randomizeChoice.Value; changes.Add($"randomize={randomizeChoice.Value}"); }
+                if (defaultBlendStyle != null || defaultBlendTime.HasValue)
+                {
+                    string style = defaultBlendStyle ?? CinemachineAdapter.GetBlendStyle(clearShot.m_DefaultBlend);
+                    float time = defaultBlendTime ?? CinemachineAdapter.GetBlendTime(clearShot.m_DefaultBlend);
+                    clearShot.m_DefaultBlend = CinemachineAdapter.CreateBlendDefinition(style, time);
+                    changes.Add($"blend={style} {time}s");
+                }
+#endif
+                EditorUtility.SetDirty(clearShot);
+            }
+
+            // StateDriven
+            var stateDriven = go.GetComponent<CinemachineStateDrivenCamera>();
+            if (stateDriven != null)
+            {
+                Undo.RecordObject(stateDriven, "Configure StateDriven");
+                if (!string.IsNullOrEmpty(animatorName))
+                {
+                    var animGo = GameObjectFinder.Find(animatorName);
+                    if (animGo != null)
+                    {
+                        var animator = animGo.GetComponent<Animator>();
+                        if (animator != null)
+                        {
+#if CINEMACHINE_3
+                            stateDriven.AnimatedTarget = animator;
+#else
+                            stateDriven.m_AnimatedTarget = animator;
+#endif
+                            changes.Add($"animator={animatorName}");
+                        }
+                    }
+                }
+                if (layerIndex.HasValue)
+                {
+#if CINEMACHINE_3
+                    stateDriven.LayerIndex = layerIndex.Value;
+#else
+                    stateDriven.m_LayerIndex = layerIndex.Value;
+#endif
+                    changes.Add($"layerIndex={layerIndex.Value}");
+                }
+                if (defaultBlendStyle != null || defaultBlendTime.HasValue)
+                {
+#if CINEMACHINE_3
+                    string style = defaultBlendStyle ?? CinemachineAdapter.GetBlendStyle(stateDriven.DefaultBlend);
+                    float time = defaultBlendTime ?? CinemachineAdapter.GetBlendTime(stateDriven.DefaultBlend);
+                    stateDriven.DefaultBlend = CinemachineAdapter.CreateBlendDefinition(style, time);
+#else
+                    string style = defaultBlendStyle ?? CinemachineAdapter.GetBlendStyle(stateDriven.m_DefaultBlend);
+                    float time = defaultBlendTime ?? CinemachineAdapter.GetBlendTime(stateDriven.m_DefaultBlend);
+                    stateDriven.m_DefaultBlend = CinemachineAdapter.CreateBlendDefinition(style, time);
+#endif
+                    changes.Add($"blend={style} {time}s");
+                }
+                EditorUtility.SetDirty(stateDriven);
+            }
+
+            // Sequencer
+            var seq = CinemachineAdapter.GetSequencer(go);
+            if (seq != null && loop.HasValue)
+            {
+                Undo.RecordObject(seq, "Configure Sequencer");
+                CinemachineAdapter.SetSequencerLoop(seq, loop.Value);
+                changes.Add($"loop={loop.Value}");
+                EditorUtility.SetDirty(seq);
+            }
+
+            if (changes.Count == 0) return new { error = "No matching camera manager found or no properties to change." };
+            return new { success = true, message = $"Configured {go.name}: {string.Join(", ", changes)}" };
+#endif
+        }
+
+        // ===================== Body / Aim Configure =====================
+
+        [UnitySkill("cinemachine_configure_body", "Configure Body stage component (Follow, OrbitalFollow, ThirdPersonFollow, PositionComposer, etc.) in one call.",
+            Category = SkillCategory.Cinemachine, Operation = SkillOperation.Modify,
+            Tags = new[] { "camera", "body", "follow", "orbital", "thirdperson", "cinemachine" },
+            Outputs = new[] { "success", "componentType", "changes" },
+            RequiresInput = new[] { "vcam" })]
+        public static object CinemachineConfigureBody(
+            string vcamName = null, int instanceId = 0, string path = null,
+            // Follow / Transposer offset
+            float? offsetX = null, float? offsetY = null, float? offsetZ = null,
+            string bindingMode = null,
+            float? dampingX = null, float? dampingY = null, float? dampingZ = null,
+            // OrbitalFollow / OrbitalTransposer
+            string orbitStyle = null, float? radius = null,
+            float? topHeight = null, float? topRadius = null,
+            float? midHeight = null, float? midRadius = null,
+            float? bottomHeight = null, float? bottomRadius = null,
+            // ThirdPersonFollow
+            float? shoulderX = null, float? shoulderY = null, float? shoulderZ = null,
+            float? verticalArmLength = null, float? cameraSide = null,
+            // PositionComposer / FramingTransposer
+            float? cameraDistance = null,
+            float? screenX = null, float? screenY = null,
+            float? deadZoneWidth = null, float? deadZoneHeight = null)
+        {
+#if !CINEMACHINE_2 && !CINEMACHINE_3
+            return NoCinemachine();
+#else
+            var (go, err) = GameObjectFinder.FindOrError(vcamName, instanceId, path);
+            if (err != null) return err;
+
+            var body = CinemachineAdapter.GetPipelineComponent(go, "Body");
+            if (body == null) return new { error = "No Body stage component found. Add one first (e.g. CinemachineFollow, CinemachineOrbitalFollow)." };
+
+            WorkflowManager.SnapshotObject(go);
+            Undo.RecordObject(body, "Configure Body");
+            var typeName = body.GetType().Name;
+            var changes = new List<string>();
+
+            void TrySet(string prop, object val, string label)
+            {
+                if (val == null) return;
+                if (SetFieldOrProperty(body, prop, val)) changes.Add($"{label}={val}");
+            }
+
+            // --- Follow / Transposer ---
+            if (typeName.Contains("Follow") && !typeName.Contains("ThirdPerson") && !typeName.Contains("Orbital")
+                || typeName.Contains("Transposer") && !typeName.Contains("Orbital") && !typeName.Contains("Framing"))
+            {
+#if CINEMACHINE_3
+                if (offsetX.HasValue || offsetY.HasValue || offsetZ.HasValue)
+                {
+                    var f = (CinemachineFollow)body;
+                    var cur = f.FollowOffset;
+                    f.FollowOffset = new Vector3(offsetX ?? cur.x, offsetY ?? cur.y, offsetZ ?? cur.z);
+                    changes.Add($"offset=({f.FollowOffset.x},{f.FollowOffset.y},{f.FollowOffset.z})");
+                }
+                TrySet("TrackerSettings.BindingMode", bindingMode, "bindingMode");
+                if (dampingX.HasValue || dampingY.HasValue || dampingZ.HasValue)
+                {
+                    var f = (CinemachineFollow)body;
+                    var cur = f.TrackerSettings.PositionDamping;
+                    var ts = f.TrackerSettings;
+                    ts.PositionDamping = new Vector3(dampingX ?? cur.x, dampingY ?? cur.y, dampingZ ?? cur.z);
+                    f.TrackerSettings = ts;
+                    changes.Add($"damping=({ts.PositionDamping.x},{ts.PositionDamping.y},{ts.PositionDamping.z})");
+                }
+#else
+                TrySet("m_FollowOffset", offsetX.HasValue || offsetY.HasValue || offsetZ.HasValue ? (object)null : null, "");
+                if (offsetX.HasValue || offsetY.HasValue || offsetZ.HasValue)
+                {
+                    var cur = (Vector3)body.GetType().GetField("m_FollowOffset")?.GetValue(body);
+                    var v = new Vector3(offsetX ?? cur.x, offsetY ?? cur.y, offsetZ ?? cur.z);
+                    body.GetType().GetField("m_FollowOffset")?.SetValue(body, v);
+                    changes.Add($"offset=({v.x},{v.y},{v.z})");
+                }
+                TrySet("m_BindingMode", bindingMode, "bindingMode");
+                TrySet("m_XDamping", dampingX, "dampingX");
+                TrySet("m_YDamping", dampingY, "dampingY");
+                TrySet("m_ZDamping", dampingZ, "dampingZ");
+#endif
+            }
+            // --- OrbitalFollow / OrbitalTransposer ---
+            else if (typeName.Contains("Orbital"))
+            {
+#if CINEMACHINE_3
+                TrySet("OrbitStyle", orbitStyle, "orbitStyle");
+                TrySet("Radius", radius, "radius");
+                TrySet("TrackerSettings.BindingMode", bindingMode, "bindingMode");
+                if (dampingX.HasValue || dampingY.HasValue || dampingZ.HasValue)
+                {
+                    var o = (CinemachineOrbitalFollow)body;
+                    var cur = o.TrackerSettings.PositionDamping;
+                    var ts = o.TrackerSettings;
+                    ts.PositionDamping = new Vector3(dampingX ?? cur.x, dampingY ?? cur.y, dampingZ ?? cur.z);
+                    o.TrackerSettings = ts;
+                    changes.Add($"damping=({ts.PositionDamping.x},{ts.PositionDamping.y},{ts.PositionDamping.z})");
+                }
+                if (topHeight.HasValue || topRadius.HasValue || midHeight.HasValue || midRadius.HasValue || bottomHeight.HasValue || bottomRadius.HasValue)
+                {
+                    var o = (CinemachineOrbitalFollow)body;
+                    var orbits = o.Orbits;
+                    if (topHeight.HasValue) { orbits.Top.Height = topHeight.Value; changes.Add($"topH={topHeight.Value}"); }
+                    if (topRadius.HasValue) { orbits.Top.Radius = topRadius.Value; changes.Add($"topR={topRadius.Value}"); }
+                    if (midHeight.HasValue) { orbits.Center.Height = midHeight.Value; changes.Add($"midH={midHeight.Value}"); }
+                    if (midRadius.HasValue) { orbits.Center.Radius = midRadius.Value; changes.Add($"midR={midRadius.Value}"); }
+                    if (bottomHeight.HasValue) { orbits.Bottom.Height = bottomHeight.Value; changes.Add($"botH={bottomHeight.Value}"); }
+                    if (bottomRadius.HasValue) { orbits.Bottom.Radius = bottomRadius.Value; changes.Add($"botR={bottomRadius.Value}"); }
+                    o.Orbits = orbits;
+                }
+#else
+                TrySet("m_BindingMode", bindingMode, "bindingMode");
+                TrySet("m_XDamping", dampingX, "dampingX");
+                TrySet("m_YDamping", dampingY, "dampingY");
+                TrySet("m_ZDamping", dampingZ, "dampingZ");
+#endif
+            }
+            // --- ThirdPersonFollow ---
+            else if (typeName.Contains("ThirdPerson") || typeName.Contains("3rdPerson"))
+            {
+#if CINEMACHINE_3
+                if (shoulderX.HasValue || shoulderY.HasValue || shoulderZ.HasValue)
+                {
+                    var tp = (CinemachineThirdPersonFollow)body;
+                    var cur = tp.ShoulderOffset;
+                    tp.ShoulderOffset = new Vector3(shoulderX ?? cur.x, shoulderY ?? cur.y, shoulderZ ?? cur.z);
+                    changes.Add($"shoulder=({tp.ShoulderOffset.x},{tp.ShoulderOffset.y},{tp.ShoulderOffset.z})");
+                }
+                TrySet("VerticalArmLength", verticalArmLength, "armLength");
+                TrySet("CameraSide", cameraSide, "cameraSide");
+                TrySet("CameraDistance", cameraDistance, "distance");
+                if (dampingX.HasValue || dampingY.HasValue || dampingZ.HasValue)
+                {
+                    var tp = (CinemachineThirdPersonFollow)body;
+                    var cur = tp.Damping;
+                    tp.Damping = new Vector3(dampingX ?? cur.x, dampingY ?? cur.y, dampingZ ?? cur.z);
+                    changes.Add($"damping=({tp.Damping.x},{tp.Damping.y},{tp.Damping.z})");
+                }
+#else
+                TrySet("ShoulderOffset", shoulderX.HasValue || shoulderY.HasValue || shoulderZ.HasValue ? (object)null : null, "");
+                if (shoulderX.HasValue || shoulderY.HasValue || shoulderZ.HasValue)
+                {
+                    var cur = (Vector3)(body.GetType().GetField("ShoulderOffset")?.GetValue(body) ?? Vector3.zero);
+                    var v = new Vector3(shoulderX ?? cur.x, shoulderY ?? cur.y, shoulderZ ?? cur.z);
+                    body.GetType().GetField("ShoulderOffset")?.SetValue(body, v);
+                    changes.Add($"shoulder=({v.x},{v.y},{v.z})");
+                }
+                TrySet("VerticalArmLength", verticalArmLength, "armLength");
+                TrySet("CameraSide", cameraSide, "cameraSide");
+                TrySet("CameraDistance", cameraDistance, "distance");
+                TrySet("Damping", dampingX.HasValue || dampingY.HasValue || dampingZ.HasValue ? (object)null : null, "");
+                if (dampingX.HasValue || dampingY.HasValue || dampingZ.HasValue)
+                {
+                    var cur = (Vector3)(body.GetType().GetField("Damping")?.GetValue(body) ?? Vector3.zero);
+                    var v = new Vector3(dampingX ?? cur.x, dampingY ?? cur.y, dampingZ ?? cur.z);
+                    body.GetType().GetField("Damping")?.SetValue(body, v);
+                    changes.Add($"damping=({v.x},{v.y},{v.z})");
+                }
+#endif
+            }
+            // --- PositionComposer / FramingTransposer ---
+            else if (typeName.Contains("PositionComposer") || typeName.Contains("FramingTransposer"))
+            {
+                TrySet("CameraDistance", cameraDistance, "distance");
+#if CINEMACHINE_3
+                TrySet("Composition.ScreenPosition", screenX.HasValue && screenY.HasValue ? (object)new Vector2(screenX.Value, screenY.Value) : null, "screen");
+                if (screenX.HasValue && !screenY.HasValue) TrySet("Composition.ScreenPosition.x", screenX, "screenX");
+                if (screenY.HasValue && !screenX.HasValue) TrySet("Composition.ScreenPosition.y", screenY, "screenY");
+                TrySet("Composition.DeadZone.Size", deadZoneWidth.HasValue && deadZoneHeight.HasValue ? (object)new Vector2(deadZoneWidth.Value, deadZoneHeight.Value) : null, "deadZone");
+                if (dampingX.HasValue || dampingY.HasValue || dampingZ.HasValue)
+                {
+                    var cur = (Vector3)(body.GetType().GetField("Damping")?.GetValue(body) ?? Vector3.zero);
+                    var v = new Vector3(dampingX ?? cur.x, dampingY ?? cur.y, dampingZ ?? cur.z);
+                    body.GetType().GetField("Damping")?.SetValue(body, v);
+                    changes.Add($"damping=({v.x},{v.y},{v.z})");
+                }
+#else
+                TrySet("m_ScreenX", screenX, "screenX");
+                TrySet("m_ScreenY", screenY, "screenY");
+                TrySet("m_DeadZoneWidth", deadZoneWidth, "deadZoneW");
+                TrySet("m_DeadZoneHeight", deadZoneHeight, "deadZoneH");
+                TrySet("m_XDamping", dampingX, "dampingX");
+                TrySet("m_YDamping", dampingY, "dampingY");
+                TrySet("m_ZDamping", dampingZ, "dampingZ");
+#endif
+            }
+            else
+            {
+                // Generic fallback - try all offset/damping params
+                TrySet("FollowOffset", offsetX.HasValue || offsetY.HasValue || offsetZ.HasValue ? (object)new Vector3(offsetX ?? 0, offsetY ?? 0, offsetZ ?? 0) : null, "offset");
+            }
+
+            EditorUtility.SetDirty(body);
+            if (changes.Count == 0) return new { success = true, componentType = typeName, message = "No changes applied (parameters may not match this component type)." };
+            return new { success = true, componentType = typeName, changes = string.Join(", ", changes) };
+#endif
+        }
+
+        [UnitySkill("cinemachine_configure_aim", "Configure Aim stage component (RotationComposer, PanTilt, Composer, POV, etc.) in one call.",
+            Category = SkillCategory.Cinemachine, Operation = SkillOperation.Modify,
+            Tags = new[] { "camera", "aim", "composer", "pantilt", "cinemachine" },
+            Outputs = new[] { "success", "componentType", "changes" },
+            RequiresInput = new[] { "vcam" })]
+        public static object CinemachineConfigureAim(
+            string vcamName = null, int instanceId = 0, string path = null,
+            // Composer / RotationComposer
+            float? screenX = null, float? screenY = null,
+            float? deadZoneWidth = null, float? deadZoneHeight = null,
+            float? softZoneWidth = null, float? softZoneHeight = null,
+            float? horizontalDamping = null, float? verticalDamping = null,
+            float? lookaheadTime = null, float? lookaheadSmoothing = null,
+            bool? centerOnActivate = null,
+            // PanTilt / POV
+            string referenceFrame = null,
+            float? panValue = null, float? tiltValue = null,
+            // Target offset
+            float? targetOffsetX = null, float? targetOffsetY = null, float? targetOffsetZ = null)
+        {
+#if !CINEMACHINE_2 && !CINEMACHINE_3
+            return NoCinemachine();
+#else
+            var (go, err) = GameObjectFinder.FindOrError(vcamName, instanceId, path);
+            if (err != null) return err;
+
+            var aim = CinemachineAdapter.GetPipelineComponent(go, "Aim");
+            if (aim == null) return new { error = "No Aim stage component found. Add one first (e.g. CinemachineRotationComposer, CinemachinePanTilt)." };
+
+            WorkflowManager.SnapshotObject(go);
+            Undo.RecordObject(aim, "Configure Aim");
+            var typeName = aim.GetType().Name;
+            var changes = new List<string>();
+
+            void TrySet(string prop, object val, string label)
+            {
+                if (val == null) return;
+                if (SetFieldOrProperty(aim, prop, val)) changes.Add($"{label}={val}");
+            }
+
+            if (typeName.Contains("Composer") || typeName.Contains("GroupComposer"))
+            {
+#if CINEMACHINE_3
+                TrySet("CenterOnActivate", centerOnActivate, "centerOnActivate");
+                if (screenX.HasValue || screenY.HasValue)
+                {
+                    var rc = (CinemachineRotationComposer)aim;
+                    var cur = rc.Composition.ScreenPosition;
+                    var pos = new Vector2(screenX ?? cur.x, screenY ?? cur.y);
+                    var comp = rc.Composition;
+                    comp.ScreenPosition = pos;
+                    rc.Composition = comp;
+                    changes.Add($"screen=({pos.x},{pos.y})");
+                }
+                TrySet("Damping", horizontalDamping.HasValue && verticalDamping.HasValue ? (object)new Vector2(horizontalDamping.Value, verticalDamping.Value) : null, "damping");
+                if (horizontalDamping.HasValue && !verticalDamping.HasValue) TrySet("Damping.x", horizontalDamping, "hDamping");
+                if (verticalDamping.HasValue && !horizontalDamping.HasValue) TrySet("Damping.y", verticalDamping, "vDamping");
+                TrySet("Lookahead.Time", lookaheadTime, "lookaheadTime");
+                TrySet("Lookahead.Smoothing", lookaheadSmoothing, "lookaheadSmooth");
+                if (targetOffsetX.HasValue || targetOffsetY.HasValue || targetOffsetZ.HasValue)
+                {
+                    var rc = (CinemachineRotationComposer)aim;
+                    var cur = rc.TargetOffset;
+                    rc.TargetOffset = new Vector3(targetOffsetX ?? cur.x, targetOffsetY ?? cur.y, targetOffsetZ ?? cur.z);
+                    changes.Add($"targetOffset=({rc.TargetOffset.x},{rc.TargetOffset.y},{rc.TargetOffset.z})");
+                }
+#else
+                TrySet("m_CenterOnActivate", centerOnActivate, "centerOnActivate");
+                TrySet("m_ScreenX", screenX, "screenX");
+                TrySet("m_ScreenY", screenY, "screenY");
+                TrySet("m_DeadZoneWidth", deadZoneWidth, "deadZoneW");
+                TrySet("m_DeadZoneHeight", deadZoneHeight, "deadZoneH");
+                TrySet("m_SoftZoneWidth", softZoneWidth, "softZoneW");
+                TrySet("m_SoftZoneHeight", softZoneHeight, "softZoneH");
+                TrySet("m_HorizontalDamping", horizontalDamping, "hDamping");
+                TrySet("m_VerticalDamping", verticalDamping, "vDamping");
+                TrySet("m_LookaheadTime", lookaheadTime, "lookaheadTime");
+                TrySet("m_LookaheadSmoothing", lookaheadSmoothing, "lookaheadSmooth");
+                if (targetOffsetX.HasValue || targetOffsetY.HasValue || targetOffsetZ.HasValue)
+                {
+                    var cur = (Vector3)(aim.GetType().GetField("m_TrackedObjectOffset")?.GetValue(aim) ?? Vector3.zero);
+                    var v = new Vector3(targetOffsetX ?? cur.x, targetOffsetY ?? cur.y, targetOffsetZ ?? cur.z);
+                    aim.GetType().GetField("m_TrackedObjectOffset")?.SetValue(aim, v);
+                    changes.Add($"targetOffset=({v.x},{v.y},{v.z})");
+                }
+#endif
+            }
+            else if (typeName.Contains("PanTilt") || typeName.Contains("POV"))
+            {
+#if CINEMACHINE_3
+                TrySet("ReferenceFrame", referenceFrame, "referenceFrame");
+                TrySet("PanAxis.Value", panValue, "pan");
+                TrySet("TiltAxis.Value", tiltValue, "tilt");
+#else
+                TrySet("m_HorizontalAxis.Value", panValue, "pan");
+                TrySet("m_VerticalAxis.Value", tiltValue, "tilt");
+#endif
+            }
+
+            EditorUtility.SetDirty(aim);
+            if (changes.Count == 0) return new { success = true, componentType = typeName, message = "No changes applied." };
+            return new { success = true, componentType = typeName, changes = string.Join(", ", changes) };
+#endif
+        }
+
+        // ===================== Extension / Impulse Configure =====================
+
+        [UnitySkill("cinemachine_configure_extension", "Configure Cinemachine extension properties (Confiner, Deoccluder, FollowZoom, GroupFraming, etc.).",
+            Category = SkillCategory.Cinemachine, Operation = SkillOperation.Modify,
+            Tags = new[] { "camera", "extension", "confiner", "deoccluder", "cinemachine" },
+            Outputs = new[] { "success", "extensionType", "changes" },
+            RequiresInput = new[] { "vcam" })]
+        public static object CinemachineConfigureExtension(
+            string vcamName = null, int instanceId = 0, string path = null,
+            string extensionName = null,
+            // Confiner
+            string boundingShapeName = null,
+            float? damping = null,
+            float? slowingDistance = null,
+            // Deoccluder / Collider
+            float? cameraRadius = null,
+            string strategy = null,
+            int? maximumEffort = null,
+            float? smoothingTime = null,
+            // FollowZoom
+            float? width = null,
+            float? fovMin = null,
+            float? fovMax = null,
+            // GroupFraming
+            string framingMode = null,
+            float? framingSize = null,
+            string sizeAdjustment = null)
+        {
+#if !CINEMACHINE_2 && !CINEMACHINE_3
+            return NoCinemachine();
+#else
+            var (go, err) = GameObjectFinder.FindOrError(vcamName, instanceId, path);
+            if (err != null) return err;
+
+            MonoBehaviour ext = null;
+            if (!string.IsNullOrEmpty(extensionName))
+            {
+                var type = FindCinemachineType(extensionName);
+                if (type != null) ext = go.GetComponent(type) as MonoBehaviour;
+            }
+            if (ext == null)
+            {
+                // Auto-detect: find first CinemachineExtension on the GO
+                var exts = go.GetComponents<CinemachineExtension>();
+                ext = exts.Length > 0 ? exts[0] : null;
+            }
+            if (ext == null) return new { error = "No Cinemachine extension found. Add one first with cinemachine_add_extension." };
+
+            WorkflowManager.SnapshotObject(go);
+            Undo.RecordObject(ext, "Configure Extension");
+            var typeName = ext.GetType().Name;
+            var changes = new List<string>();
+
+            void TrySet(string prop, object val, string label)
+            {
+                if (val == null) return;
+                if (SetFieldOrProperty(ext, prop, val)) changes.Add($"{label}={val}");
+            }
+
+            // Confiner (CM2: CinemachineConfiner, CM3: CinemachineConfiner2D/3D)
+            if (typeName.Contains("Confiner"))
+            {
+                if (!string.IsNullOrEmpty(boundingShapeName))
+                {
+                    var shapeGo = GameObjectFinder.Find(boundingShapeName);
+                    if (shapeGo != null)
+                    {
+                        // Try Collider2D, then Collider
+                        var col2d = shapeGo.GetComponent<Collider2D>();
+                        var col3d = shapeGo.GetComponent<Collider>();
+                        if (col2d != null && SetFieldOrProperty(ext, "BoundingShape2D", col2d))
+                            changes.Add($"boundingShape={boundingShapeName}(2D)");
+                        else if (col2d != null && SetFieldOrProperty(ext, "m_BoundingShape2D", col2d))
+                            changes.Add($"boundingShape={boundingShapeName}(2D)");
+                        else if (col3d != null && SetFieldOrProperty(ext, "BoundingVolume", col3d))
+                            changes.Add($"boundingVolume={boundingShapeName}(3D)");
+                        else if (col3d != null && SetFieldOrProperty(ext, "m_BoundingVolume", col3d))
+                            changes.Add($"boundingVolume={boundingShapeName}(3D)");
+                    }
+                }
+                TrySet("Damping", damping, "damping");
+                TrySet("m_Damping", damping, "damping");
+                TrySet("SlowingDistance", slowingDistance, "slowingDist");
+                TrySet("m_SlowingDistance", slowingDistance, "slowingDist");
+            }
+            // Deoccluder / Collider
+            else if (typeName.Contains("Deoccluder") || typeName.Contains("Collider"))
+            {
+                TrySet("AvoidObstacles.CameraRadius", cameraRadius, "camRadius");
+                TrySet("m_AvoidOcclusionRadius", cameraRadius, "camRadius");
+                TrySet("AvoidObstacles.Strategy", strategy, "strategy");
+                TrySet("m_Strategy", strategy, "strategy");
+                TrySet("AvoidObstacles.MaximumEffort", maximumEffort, "maxEffort");
+                TrySet("m_MaximumEffort", maximumEffort, "maxEffort");
+                TrySet("AvoidObstacles.SmoothingTime", smoothingTime, "smoothTime");
+                TrySet("m_SmoothingTime", smoothingTime, "smoothTime");
+                TrySet("AvoidObstacles.Damping", damping, "damping");
+                TrySet("m_Damping", damping, "damping");
+            }
+            // FollowZoom
+            else if (typeName.Contains("FollowZoom"))
+            {
+                TrySet("Width", width, "width");
+                TrySet("m_Width", width, "width");
+                TrySet("Damping", damping, "damping");
+                TrySet("m_Damping", damping, "damping");
+                if (fovMin.HasValue && fovMax.HasValue)
+                {
+                    var range = new Vector2(fovMin.Value, fovMax.Value);
+                    if (SetFieldOrProperty(ext, "FovRange", range) || SetFieldOrProperty(ext, "m_MinFOV", fovMin))
+                    {
+                        SetFieldOrProperty(ext, "m_MaxFOV", fovMax);
+                        changes.Add($"fovRange=({fovMin},{fovMax})");
+                    }
+                }
+            }
+            // GroupFraming
+            else if (typeName.Contains("GroupFraming"))
+            {
+                TrySet("FramingMode", framingMode, "framingMode");
+                TrySet("FramingSize", framingSize, "framingSize");
+                TrySet("SizeAdjustment", sizeAdjustment, "sizeAdjust");
+                TrySet("Damping", damping, "damping");
+            }
+            else
+            {
+                // Generic: try all params
+                TrySet("Damping", damping, "damping");
+                TrySet("CameraRadius", cameraRadius, "camRadius");
+            }
+
+            EditorUtility.SetDirty(ext);
+            if (changes.Count == 0) return new { success = true, extensionType = typeName, message = "No changes applied." };
+            return new { success = true, extensionType = typeName, changes = string.Join(", ", changes) };
+#endif
+        }
+
+        [UnitySkill("cinemachine_configure_impulse_source", "Configure CinemachineImpulseSource definition (shape, duration, gains).",
+            Category = SkillCategory.Cinemachine, Operation = SkillOperation.Modify,
+            Tags = new[] { "camera", "impulse", "shake", "configure", "cinemachine" },
+            Outputs = new[] { "success", "changes" },
+            RequiresInput = new[] { "source" })]
+        public static object CinemachineConfigureImpulseSource(
+            string sourceName = null, int sourceInstanceId = 0, string sourcePath = null,
+            float? amplitudeGain = null,
+            float? frequencyGain = null,
+            float? impactRadius = null,
+            float? duration = null,
+            float? dissipationRate = null)
+        {
+#if !CINEMACHINE_2 && !CINEMACHINE_3
+            return NoCinemachine();
+#else
+            MonoBehaviour source = null;
+            if (!string.IsNullOrEmpty(sourceName) || sourceInstanceId != 0 || !string.IsNullOrEmpty(sourcePath))
+            {
+                var (go, err) = GameObjectFinder.FindOrError(sourceName, sourceInstanceId, sourcePath);
+                if (err != null) return err;
+                source = go.GetComponent<CinemachineImpulseSource>();
+            }
+            else
+            {
+                var sources = FindAllObjects<CinemachineImpulseSource>();
+                source = sources.Length > 0 ? sources[0] : null;
+            }
+            if (source == null) return new { error = "No CinemachineImpulseSource found." };
+
+            WorkflowManager.SnapshotObject(source.gameObject);
+            Undo.RecordObject(source, "Configure Impulse Source");
+            var changes = new List<string>();
+
+            void TrySet(string prop, object val, string label)
+            {
+                if (val == null) return;
+                if (SetFieldOrProperty(source, prop, val)) changes.Add($"{label}={val}");
+            }
+
+            // CM3: ImpulseDefinition is a direct field, CM2: m_ImpulseDefinition
+#if CINEMACHINE_3
+            TrySet("ImpulseDefinition.ImpactRadius", impactRadius, "impactRadius");
+            TrySet("ImpulseDefinition.DissipationRate", dissipationRate, "dissipationRate");
+            TrySet("ImpulseDefinition.AmplitudeGain", amplitudeGain, "amplitudeGain");
+            TrySet("ImpulseDefinition.FrequencyGain", frequencyGain, "frequencyGain");
+            TrySet("ImpulseDefinition.TimeEnvelope.Duration", duration, "duration");
+#else
+            TrySet("m_ImpulseDefinition.m_ImpactRadius", impactRadius, "impactRadius");
+            TrySet("m_ImpulseDefinition.m_DissipationRate", dissipationRate, "dissipationRate");
+            TrySet("m_ImpulseDefinition.m_AmplitudeGain", amplitudeGain, "amplitudeGain");
+            TrySet("m_ImpulseDefinition.m_FrequencyGain", frequencyGain, "frequencyGain");
+            TrySet("m_ImpulseDefinition.m_TimeEnvelope.m_Duration", duration, "duration");
+#endif
+
+            EditorUtility.SetDirty(source);
+            if (changes.Count == 0) return new { success = true, message = "No changes applied." };
+            return new { success = true, source = source.gameObject.name, changes = string.Join(", ", changes) };
 #endif
         }
     }
