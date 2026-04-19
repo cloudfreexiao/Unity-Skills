@@ -434,7 +434,7 @@ public class {testName}
     }}
 }}
 ";
-            System.IO.File.WriteAllText(path, content, new System.Text.UTF8Encoding(false));
+            System.IO.File.WriteAllText(path, content, SkillsCommon.Utf8NoBom);
             AssetDatabase.ImportAsset(path);
             var job = AsyncJobService.StartScriptMutationJob("test_create_editmode", path.Replace("\\", "/"), true, 20);
             return new
@@ -478,7 +478,7 @@ public class {testName}
     }}
 }}
 ";
-            System.IO.File.WriteAllText(path, content, new System.Text.UTF8Encoding(false));
+            System.IO.File.WriteAllText(path, content, SkillsCommon.Utf8NoBom);
             AssetDatabase.ImportAsset(path);
             var job = AsyncJobService.StartScriptMutationJob("test_create_playmode", path.Replace("\\", "/"), true, 20);
             return new

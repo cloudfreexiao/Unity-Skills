@@ -34,7 +34,7 @@ namespace UnitySkills
         private static volatile bool _isRunning;
         private static int _port = 8090;
         private static readonly string _prefixBase = "http://localhost:";
-        private static string _prefix => $"{_prefixBase}{_port}/";
+        private static string _prefix = $"{_prefixBase}{_port}/";
         
         // Job queue - HTTP thread enqueues, Main thread dequeues and processes
         private static readonly Queue<RequestJob> _jobQueue = new Queue<RequestJob>();
@@ -82,7 +82,7 @@ namespace UnitySkills
         // Maximum allowed POST body size
         private const int MaxBodySizeBytes = 10 * 1024 * 1024; // 10MB
         // Heartbeat interval for registry (seconds)
-        private const double HeartbeatInterval = 10.0;
+        private const double HeartbeatInterval = 30.0;
         private static double _lastHeartbeatTime = 0;
 
         // Watchdog: periodically verify listener thread is alive and restart if not
@@ -103,20 +103,22 @@ namespace UnitySkills
         // Startup diagnostic: counts ProcessJobQueue ticks since Start() for self-test diagnostics
         private static volatile int _pjqTicksSinceStart = -1;
         
-        // Keep Unicode readable instead of forcing escaped sequences.
-        private static readonly JsonSerializerSettings _jsonSettings = new JsonSerializerSettings
-        {
-            StringEscapeHandling = StringEscapeHandling.Default
-        };
+        // Shared JSON settings from SkillsCommon (single definition, no duplication)
+        private static readonly JsonSerializerSettings _jsonSettings = SkillsCommon.JsonSettings;
         
-        // Persistence keys for Domain Reload recovery (Project Scoped)
+        // Persistence keys for Domain Reload recovery (Project Scoped) — lazy-cached
         private static string PrefKey(string key) => $"UnitySkills_{RegistryService.InstanceId}_{key}";
-        
-        private static string PREF_SERVER_SHOULD_RUN => PrefKey("ServerShouldRun");
-        private static string PREF_AUTO_START => PrefKey("AutoStart");
-        private static string PREF_TOTAL_PROCESSED => PrefKey("TotalProcessed");
-        private static string PREF_LAST_PORT => PrefKey("LastPort");
-        private static string PREF_CONSECUTIVE_FAILURES => PrefKey("ConsecutiveRestartFailures");
+
+        private static string _prefServerShouldRun;
+        private static string _prefAutoStart;
+        private static string _prefTotalProcessed;
+        private static string _prefLastPort;
+        private static string _prefConsecutiveFailures;
+        private static string PREF_SERVER_SHOULD_RUN => _prefServerShouldRun ??= PrefKey("ServerShouldRun");
+        private static string PREF_AUTO_START => _prefAutoStart ??= PrefKey("AutoStart");
+        private static string PREF_TOTAL_PROCESSED => _prefTotalProcessed ??= PrefKey("TotalProcessed");
+        private static string PREF_LAST_PORT => _prefLastPort ??= PrefKey("LastPort");
+        private static string PREF_CONSECUTIVE_FAILURES => _prefConsecutiveFailures ??= PrefKey("ConsecutiveRestartFailures");
         private const int MaxConsecutiveFailures = 10;
 
         // Domain Reload tracking
@@ -347,13 +349,12 @@ namespace UnitySkills
             if (!string.IsNullOrEmpty(explicitId))
                 return explicitId;
 
-            // Priority 2: Detect from User-Agent via table lookup
+            // Priority 2: Detect from User-Agent via table lookup (OrdinalIgnoreCase avoids ToLowerInvariant allocation)
             var ua = request.UserAgent ?? "";
-            var uaLower = ua.ToLowerInvariant();
 
             foreach (var (keyword, agentId) in _agentKeywords)
             {
-                if (uaLower.Contains(keyword))
+                if (ua.IndexOf(keyword, StringComparison.OrdinalIgnoreCase) >= 0)
                     return agentId;
             }
 
@@ -588,6 +589,7 @@ namespace UnitySkills
                         _listener.Start();
 
                         _port = preferredPort;
+                        _prefix = $"{_prefixBase}{_port}/";
                         started = true;
                     }
                     catch
@@ -615,6 +617,7 @@ namespace UnitySkills
                             _listener.Start();
 
                             _port = p;
+                            _prefix = $"{_prefixBase}{_port}/";
                             started = true;
                             break;
                         }
@@ -650,7 +653,7 @@ namespace UnitySkills
                 _keepAliveThread.Start();
 
                 // These calls are safe here because Start() is called from Main thread
-                var skillCount = SkillRouter.GetManifest().Split('\n').Length;
+                var skillCount = SkillRouter.SkillCount;
                 SkillsLogger.Log($"REST Server started at {_prefix}");
                 SkillsLogger.Log($"{skillCount} skills loaded | Instance: {RegistryService.InstanceId}");
                 SkillsLogger.LogVerbose($"Domain Reload Recovery: ENABLED (AutoStart={AutoStart})");
@@ -1043,7 +1046,9 @@ namespace UnitySkills
                     job.IsProcessed = true;
                     job.CompletionSignal?.Set();
                     Interlocked.Increment(ref _totalRequestsProcessed);
-                    GameObjectFinder.InvalidateCache();
+                    // Only invalidate scene cache when request may have mutated state (POST = skill execution)
+                    if (job.HttpMethod == "POST")
+                        GameObjectFinder.InvalidateCache();
                 }
 
                 processed++;
@@ -1118,10 +1123,10 @@ namespace UnitySkills
                 return;
             }
             
-            string path = job.Path.ToLower();
-            
+            string path = job.Path;
+
             // Health check
-            if (path == "/" || path == "/health")
+            if (path == "/" || string.Equals(path, "/health", StringComparison.OrdinalIgnoreCase))
             {
                 job.StatusCode = 200;
                 job.ResponseJson = JsonConvert.SerializeObject(new {
@@ -1157,7 +1162,7 @@ namespace UnitySkills
             }
             
             // Get skills manifest (with optional filtering)
-            if (path == "/skills" && job.HttpMethod == "GET")
+            if (string.Equals(path, "/skills", StringComparison.OrdinalIgnoreCase) && job.HttpMethod == "GET")
             {
                 job.StatusCode = 200;
                 job.ResponseJson = string.IsNullOrEmpty(job.QueryString)
@@ -1166,7 +1171,7 @@ namespace UnitySkills
                 return;
             }
 
-            if (path == "/skills/schema" && job.HttpMethod == "GET")
+            if (string.Equals(path, "/skills/schema", StringComparison.OrdinalIgnoreCase) && job.HttpMethod == "GET")
             {
                 job.StatusCode = 200;
                 job.ResponseJson = SkillRouter.GetSchema();
@@ -1174,7 +1179,7 @@ namespace UnitySkills
             }
 
             // Skill recommendation by intent
-            if (path == "/skills/recommend" && job.HttpMethod == "GET")
+            if (string.Equals(path, "/skills/recommend", StringComparison.OrdinalIgnoreCase) && job.HttpMethod == "GET")
             {
                 job.StatusCode = 200;
                 job.ResponseJson = SkillRouter.GetRecommendations(job.QueryString);
@@ -1182,7 +1187,7 @@ namespace UnitySkills
             }
 
             // Skill dependency chain
-            if (path == "/skills/chain" && job.HttpMethod == "GET")
+            if (string.Equals(path, "/skills/chain", StringComparison.OrdinalIgnoreCase) && job.HttpMethod == "GET")
             {
                 job.StatusCode = 200;
                 job.ResponseJson = SkillRouter.GetSkillChain(job.QueryString);
@@ -1190,7 +1195,7 @@ namespace UnitySkills
             }
             
             // Execute / DryRun / Plan skill
-            if (path.StartsWith("/skill/") && job.HttpMethod == "POST")
+            if (path.StartsWith("/skill/", StringComparison.OrdinalIgnoreCase) && job.HttpMethod == "POST")
             {
                 if (_domainReloadPending || ServerAvailabilityHelper.IsCompilationInProgress())
                 {

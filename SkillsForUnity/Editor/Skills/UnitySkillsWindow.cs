@@ -85,9 +85,7 @@ namespace UnitySkills
         {
             _skillsByCategory = new Dictionary<string, List<SkillInfo>>();
 
-            var allTypes = System.AppDomain.CurrentDomain.GetAssemblies()
-                .Where(a => !a.IsDynamic)
-                .SelectMany(a => { try { return a.GetTypes(); } catch { return new System.Type[0]; } });
+            var allTypes = SkillsCommon.GetAllLoadedTypes();
 
             foreach (var type in allTypes)
             {

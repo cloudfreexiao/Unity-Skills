@@ -83,6 +83,7 @@ namespace UnitySkills
             job.resultSummary = "Job was cancelled.";
             AddLog(job, "warn", "cancelled", "Cancellation requested.");
             BatchPersistence.UpsertJob(job);
+            BatchPersistence.FlushIfDirty();
             return job;
         }
 
@@ -235,6 +236,7 @@ namespace UnitySkills
                 job.resultSummary = $"Job failed: {ex.Message}";
                 AddLog(job, "error", "failed", ex.Message);
                 BatchPersistence.UpsertJob(job);
+                BatchPersistence.FlushIfDirty();
                 EndWorkflowSession(context);
                 FinalizeRuntimeContext(context);
             }
@@ -270,6 +272,7 @@ namespace UnitySkills
             BatchPersistence.UpsertReport(report);
             AddLog(job, "info", "completed", report.summary);
             BatchPersistence.UpsertJob(job);
+            BatchPersistence.FlushIfDirty();
             EndWorkflowSession(context);
             FinalizeRuntimeContext(context);
         }
@@ -279,6 +282,7 @@ namespace UnitySkills
             var job = context.Job;
             job.updatedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
             BatchPersistence.UpsertJob(job);
+            BatchPersistence.FlushIfDirty();
             EndWorkflowSession(context);
             FinalizeRuntimeContext(context);
         }

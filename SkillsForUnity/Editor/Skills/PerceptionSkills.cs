@@ -1228,8 +1228,7 @@ namespace UnitySkills
             ReadOnly = true)]
         public static object ScriptAnalyze(string scriptName, bool includePrivate = false)
         {
-            var type = AppDomain.CurrentDomain.GetAssemblies()
-                .SelectMany(a => { try { return a.GetTypes(); } catch { return new Type[0]; } })
+            var type = SkillsCommon.GetAllLoadedTypes()
                 .FirstOrDefault(t => t.Name.Equals(scriptName, StringComparison.OrdinalIgnoreCase) &&
                                      (typeof(MonoBehaviour).IsAssignableFrom(t) ||
                                       typeof(ScriptableObject).IsAssignableFrom(t) ||
@@ -1916,7 +1915,7 @@ namespace UnitySkills
             var dir = Path.GetDirectoryName(savePath);
             if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
                 Directory.CreateDirectory(dir);
-            File.WriteAllText(savePath, sb.ToString(), new UTF8Encoding(false));
+            File.WriteAllText(savePath, sb.ToString(), SkillsCommon.Utf8NoBom);
             AssetDatabase.ImportAsset(savePath);
 
             return new
@@ -2397,7 +2396,7 @@ namespace UnitySkills
                 var dir = Path.GetDirectoryName(savePath);
                 if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
                     Directory.CreateDirectory(dir);
-                File.WriteAllText(savePath, md, new UTF8Encoding(false));
+                File.WriteAllText(savePath, md, SkillsCommon.Utf8NoBom);
                 AssetDatabase.ImportAsset(savePath);
                 savedPath = savePath;
             }
@@ -2432,8 +2431,7 @@ namespace UnitySkills
                 return new { success = false, error = "scriptName is required" };
 
             // Find the entry script type
-            var allTypes = AppDomain.CurrentDomain.GetAssemblies()
-                .SelectMany(a => { try { return a.GetTypes(); } catch { return new Type[0]; } })
+            var allTypes = SkillsCommon.GetAllLoadedTypes()
                 .Where(t => t.IsClass && IsUserScript(t))
                 .ToList();
 
@@ -2804,7 +2802,7 @@ namespace UnitySkills
 
             // 3. High-poly meshes without LOD
             var meshFilters = FindHelper.FindAll<MeshFilter>();
-            var highPoly = meshFilters.Where(mf => mf.sharedMesh != null && mf.sharedMesh.triangles.Length / 3 > 10000
+            var highPoly = meshFilters.Where(mf => mf.sharedMesh != null && SkillsCommon.GetTriangleCount(mf.sharedMesh) > 10000
                 && mf.GetComponent<LODGroup>() == null).ToArray();
             if (highPoly.Length > 0)
                 hints.Add(new { priority = 2, category = "Geometry", issue = $"{highPoly.Length} high-poly meshes (>10k tris) without LOD",

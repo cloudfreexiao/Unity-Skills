@@ -396,6 +396,7 @@ namespace UnitySkills
             job.resultSummary = "Job was cancelled.";
             AddLog(job, "warn", "cancelled", "Cancellation requested.", "cancel_requested");
             BatchPersistence.UpsertJob(job);
+            BatchPersistence.FlushIfDirty();
             BatchJobService.NotifyCancelled(jobId);
             return job;
         }
@@ -449,6 +450,7 @@ namespace UnitySkills
             });
             AddLog(job, "error", stage, error, "job_failed");
             BatchPersistence.UpsertJob(job);
+            BatchPersistence.FlushIfDirty();
         }
 
         internal static void CompleteJob(string jobId, string summary, Dictionary<string, object> resultData = null)
@@ -475,6 +477,7 @@ namespace UnitySkills
             });
             AddLog(job, "info", "completed", summary, "job_completed");
             BatchPersistence.UpsertJob(job);
+            BatchPersistence.FlushIfDirty();
         }
 
         private static void ProcessJobs()

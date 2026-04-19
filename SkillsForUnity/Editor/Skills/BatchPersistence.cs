@@ -15,6 +15,7 @@ namespace UnitySkills
 
         private static readonly object SyncRoot = new object();
         private static BatchStorageState _state;
+        private static bool _dirty;
         [ThreadStatic] private static int _transientScopeDepth;
 
         private static string StorageDirectory => Path.Combine(Application.dataPath, "../Library/UnitySkills");
@@ -79,8 +80,18 @@ namespace UnitySkills
                 EnsureDefaults();
                 PruneExpiredPreviews();
                 var json = JsonConvert.SerializeObject(_state, JsonSettings);
-                File.WriteAllText(StoragePath, json, new System.Text.UTF8Encoding(false));
+                File.WriteAllText(StoragePath, json, SkillsCommon.Utf8NoBom);
+                _dirty = false;
             }
+        }
+
+        /// <summary>
+        /// Flush pending changes to disk if the state has been modified.
+        /// Call at key transition points (job completion, cancellation, failure).
+        /// </summary>
+        internal static void FlushIfDirty()
+        {
+            if (_dirty) Save();
         }
 
         internal static void UpsertPreview(BatchPreviewEnvelope preview)
@@ -166,8 +177,8 @@ namespace UnitySkills
                     .OrderByDescending(j => j.updatedAt)
                     .Take(100)
                     .ToList();
+                _dirty = true;
             }
-            Save();
         }
 
         internal static BatchJobRecord GetJob(string jobId)
@@ -194,8 +205,8 @@ namespace UnitySkills
             lock (SyncRoot)
             {
                 _state.jobs.RemoveAll(j => string.Equals(j.jobId, jobId, StringComparison.OrdinalIgnoreCase));
+                _dirty = true;
             }
-            Save();
         }
 
         private static void NormalizeRunningJobsAfterReload()

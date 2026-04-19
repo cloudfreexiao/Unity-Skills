@@ -565,11 +565,10 @@ namespace UnitySkills
             }
             
             // 4. Search all loaded assemblies by simple name (slowest but most comprehensive)
-            result = System.AppDomain.CurrentDomain.GetAssemblies()
-                .SelectMany(a => { try { return a.GetTypes(); } catch { return new System.Type[0]; } })
-                .FirstOrDefault(t => 
-                    (t.Name.Equals(simpleName, System.StringComparison.OrdinalIgnoreCase) || 
-                     t.FullName == name) && 
+            result = SkillsCommon.GetAllLoadedTypes()
+                .FirstOrDefault(t =>
+                    (t.Name.Equals(simpleName, System.StringComparison.OrdinalIgnoreCase) ||
+                     t.FullName == name) &&
                     typeof(Component).IsAssignableFrom(t));
 
             if (result != null)
@@ -612,9 +611,8 @@ namespace UnitySkills
         {
             var simpleName = searchTerm.Contains(".") ? searchTerm.Substring(searchTerm.LastIndexOf('.') + 1) : searchTerm;
             
-            return System.AppDomain.CurrentDomain.GetAssemblies()
-                .SelectMany(a => { try { return a.GetTypes(); } catch { return new System.Type[0]; } })
-                .Where(t => typeof(Component).IsAssignableFrom(t) && 
+            return SkillsCommon.GetAllLoadedTypes()
+                .Where(t => typeof(Component).IsAssignableFrom(t) &&
                            t.Name.IndexOf(simpleName, System.StringComparison.OrdinalIgnoreCase) >= 0)
                 .Take(10)
                 .Select(t => t.FullName)

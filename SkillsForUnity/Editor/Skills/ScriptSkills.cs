@@ -14,7 +14,6 @@ namespace UnitySkills
     public static class ScriptSkills
     {
         private const int DefaultDiagnosticLimit = 20;
-        private static readonly UTF8Encoding Utf8NoBom = new UTF8Encoding(false);
 
         [UnitySkill("script_create", "Create a new C# script. Before generating gameplay scripts, actively consider coupling, performance, and maintainability. Optional: namespace", TracksWorkflow = true,
             Category = SkillCategory.Script, Operation = SkillOperation.Create,
@@ -56,7 +55,7 @@ namespace UnitySkills
             content = content.Replace("{CLASS}", scriptName);
             content = content.Replace("{NAMESPACE}", string.IsNullOrEmpty(namespaceName) ? "DefaultNamespace" : namespaceName);
 
-            File.WriteAllText(path, content, Utf8NoBom);
+            File.WriteAllText(path, content, SkillsCommon.Utf8NoBom);
             AssetDatabase.ImportAsset(path);
 
             var asset = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(path);
@@ -216,7 +215,7 @@ namespace UnitySkills
                 lines.Insert(atLine, content);
             }
 
-            File.WriteAllLines(scriptPath, lines, Utf8NoBom);
+            File.WriteAllLines(scriptPath, lines, SkillsCommon.Utf8NoBom);
             AssetDatabase.ImportAsset(scriptPath);
             return CreateScriptMutationResult(scriptPath, "script_append", checkCompile, diagnosticLimit);
         }
@@ -244,7 +243,7 @@ namespace UnitySkills
                 ? Regex.Matches(content, find, RegexOptions.None, System.TimeSpan.FromSeconds(2)).Count
                 : (content.Length - content.Replace(find, "").Length) / (find.Length > 0 ? find.Length : 1);
 
-            File.WriteAllText(scriptPath, newContent, Utf8NoBom);
+            File.WriteAllText(scriptPath, newContent, SkillsCommon.Utf8NoBom);
             AssetDatabase.ImportAsset(scriptPath);
 
             var result = CreateScriptMutationResult(scriptPath, "script_replace", checkCompile, diagnosticLimit);

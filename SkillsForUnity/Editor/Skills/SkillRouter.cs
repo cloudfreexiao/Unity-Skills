@@ -61,6 +61,10 @@ namespace UnitySkills
             // Cached to avoid repeated allocations per Execute/DryRun call
             public string[] ParameterNames;
             public HashSet<string> AllowedParameterSet;
+            // Pre-computed lowercase for filtering/search (avoids per-query ToLowerInvariant)
+            public string NameLower;
+            public string DescriptionLower;
+            public string[] TagsLower;
         }
 
         private static volatile Dictionary<string, SkillInfo> _skills;
@@ -68,6 +72,16 @@ namespace UnitySkills
         private static string _cachedManifest;
         private static string _cachedSchema;
         private static Dictionary<string, List<SkillInfo>> _outputIndex;
+
+        /// <summary>Number of registered skills. Avoids parsing manifest just for a count.</summary>
+        public static int SkillCount
+        {
+            get
+            {
+                Initialize();
+                return _skills.Count;
+            }
+        }
         private static readonly object _initLock = new object();
 
         private static HashSet<string> _workflowTrackedSkills = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -270,11 +284,8 @@ namespace UnitySkills
 
         private static HashSet<SkillCategory> ExtractCategories(string[] keywords)
             => MatchKeywords(keywords, _categoryKeywords);
-        // Keep Unicode readable in JSON responses instead of forcing escaped sequences.
-        private static readonly JsonSerializerSettings _jsonSettings = new JsonSerializerSettings
-        {
-            StringEscapeHandling = StringEscapeHandling.Default
-        };
+        // Shared JSON settings from SkillsCommon (single definition, no duplication)
+        private static readonly JsonSerializerSettings _jsonSettings = SkillsCommon.JsonSettings;
 
         public static void Initialize()
         {
@@ -286,9 +297,7 @@ namespace UnitySkills
                 var skills = new Dictionary<string, SkillInfo>(StringComparer.OrdinalIgnoreCase);
                 var trackedSkills = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-                var allTypes = AppDomain.CurrentDomain.GetAssemblies()
-                    .Where(a => !a.IsDynamic)
-                    .SelectMany(a => { try { return a.GetTypes(); } catch { return new Type[0]; } });
+                var allTypes = SkillsCommon.GetAllLoadedTypes();
 
                 foreach (var type in allTypes)
                 {
@@ -325,7 +334,10 @@ namespace UnitySkills
                                 RiskLevel = attr.RiskLevel ?? "low",
                                 RequiresPackages = attr.RequiresPackages,
                                 ParameterNames = parameterNames,
-                                AllowedParameterSet = allowedSet
+                                AllowedParameterSet = allowedSet,
+                                NameLower = name.ToLowerInvariant(),
+                                DescriptionLower = (attr.Description ?? "").ToLowerInvariant(),
+                                TagsLower = attr.Tags?.Select(t => t.ToLowerInvariant()).ToArray()
                             };
                             if (attr.TracksWorkflow)
                                 trackedSkills.Add(name);
@@ -772,9 +784,9 @@ namespace UnitySkills
             {
                 var keywords = q.ToLowerInvariant().Split(new[] { ' ', '+' }, StringSplitOptions.RemoveEmptyEntries);
                 filtered = filtered.Where(s => keywords.Any(kw =>
-                    s.Name.ToLowerInvariant().Contains(kw) ||
-                    (s.Description != null && s.Description.ToLowerInvariant().Contains(kw)) ||
-                    (s.Tags != null && s.Tags.Any(t => t.ToLowerInvariant().Contains(kw)))));
+                    s.NameLower.Contains(kw) ||
+                    s.DescriptionLower.Contains(kw) ||
+                    (s.TagsLower != null && s.TagsLower.Any(t => t.Contains(kw)))));
             }
 
             var results = filtered.ToList();
@@ -867,8 +879,8 @@ namespace UnitySkills
             {
                 int score = 0;
                 var matchedOn = new List<string>();
-                var nameLower = s.Name.ToLowerInvariant();
-                var descLower = s.Description?.ToLowerInvariant() ?? "";
+                var nameLower = s.NameLower;
+                var descLower = s.DescriptionLower;
 
                 foreach (var kw in keywords)
                 {
@@ -877,7 +889,7 @@ namespace UnitySkills
                         score += 3;
                         matchedOn.Add($"name:{kw}");
                     }
-                    if (s.Tags != null && s.Tags.Any(t => t.ToLowerInvariant().Contains(kw)))
+                    if (s.TagsLower != null && s.TagsLower.Any(t => t.Contains(kw)))
                     {
                         score += 2;
                         matchedOn.Add($"tag:{kw}");

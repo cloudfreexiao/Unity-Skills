@@ -128,7 +128,7 @@ namespace UnitySkills
                                 hashGroups[hash].Add(path);
                             }
                         }
-                        catch { }
+                        catch (System.Exception ex) { SkillsLogger.LogVerbose($"Hash failed for {path}: {ex.Message}"); }
                     }
 
                     foreach (var hashGroup in hashGroups.Values.Where(g => g.Count > 1))
@@ -372,7 +372,7 @@ namespace UnitySkills
                 return new { success = false, error = $"Asset not found: {assetPath}" };
 
             var usedBy = new List<object>();
-            var allAssetGuids = AssetDatabase.FindAssets("t:Object");
+            var allAssetGuids = AssetDatabase.FindAssets("t:Object", new[] { "Assets" });
 
             foreach (var guid in allAssetGuids)
             {

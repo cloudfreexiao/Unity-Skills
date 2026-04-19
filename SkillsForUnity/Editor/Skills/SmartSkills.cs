@@ -188,7 +188,7 @@ namespace UnitySkills
             if (string.IsNullOrEmpty(fieldName)) return new { error = "fieldName is required" };
 
             // 1. Find Target
-            var targetGo = GameObject.Find(targetName);
+            var targetGo = GameObjectFinder.Find(name: targetName);
             if (targetGo == null) 
                 return new { success = false, error = $"Target '{targetName}' not found" };
 
@@ -303,8 +303,7 @@ namespace UnitySkills
             if (CommonUnityTypes.TryGetValue(name, out var t)) return t;
 
             // Slow path: reflection
-            return System.AppDomain.CurrentDomain.GetAssemblies()
-                .SelectMany(a => { try { return a.GetTypes(); } catch { return new System.Type[0]; } })
+            return SkillsCommon.GetAllLoadedTypes()
                 .FirstOrDefault(type => type.Name.Equals(name, System.StringComparison.OrdinalIgnoreCase));
         }
 
@@ -357,7 +356,7 @@ namespace UnitySkills
                     case "contains": return valStr.ToLower().Contains(target?.ToLower() ?? "");
                 }
             }
-            catch { }
+            catch (System.Exception ex) { SkillsLogger.LogVerbose($"Condition eval failed: {ex.Message}"); }
             return false;
         }
 

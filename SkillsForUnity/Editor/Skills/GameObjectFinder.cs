@@ -1,8 +1,11 @@
+using System.IO;
+using System.Text;
 using UnityEngine;
 using UnityEditor;
 using System.Linq;
 using System.Collections.Generic;
 using UnityEngine.SceneManagement;
+using Newtonsoft.Json;
 
 namespace UnitySkills
 {
@@ -101,6 +104,29 @@ namespace UnitySkills
                 return new { error = "Cannot delete root Assets or Packages folder" };
 
             return null;
+        }
+
+        /// <summary>
+        /// Validate asset path for safety AND existence.
+        /// Usage: if (Validate.SafePathExists(path, "path") is object err) return err;
+        /// </summary>
+        public static object SafePathExists(string path, string paramName)
+        {
+            var safeErr = SafePath(path, paramName);
+            if (safeErr != null) return safeErr;
+            if (!File.Exists(path) && !Directory.Exists(path))
+                return new { error = $"Path does not exist: {path}" };
+            return null;
+        }
+
+        /// <summary>
+        /// Ensure parent directory exists for a file path.
+        /// </summary>
+        public static void EnsureDirectoryExists(string filePath)
+        {
+            var dir = Path.GetDirectoryName(filePath);
+            if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
+                Directory.CreateDirectory(dir);
         }
     }
 
@@ -516,6 +542,18 @@ namespace UnitySkills
         }
 
         /// <summary>
+        /// Find a GameObject and get a required component, or return an error.
+        /// </summary>
+        public static (T component, object error) FindComponentOrError<T>(string name = null, int instanceId = 0, string path = null) where T : Component
+        {
+            var (go, err) = FindOrError(name, instanceId, path);
+            if (err != null) return (null, err);
+            var comp = go.GetComponent<T>();
+            if (comp == null) return (null, new { error = $"No {typeof(T).Name} component on {go.name}" });
+            return (comp, null);
+        }
+
+        /// <summary>
         /// Get suggestions for similar objects when search fails
         /// </summary>
         private static string[] GetSuggestions(string name, string tag, string componentType)
@@ -599,6 +637,42 @@ namespace UnitySkills
             // Try as component type
             go = FindByComponent(query);
             return go;
+        }
+    }
+
+    /// <summary>
+    /// Shared utilities used across skill modules.
+    /// </summary>
+    public static class SkillsCommon
+    {
+        /// <summary>UTF-8 encoding without BOM.</summary>
+        public static readonly Encoding Utf8NoBom = new UTF8Encoding(false);
+
+        /// <summary>Shared JSON settings — Unicode readable, no escaped sequences.</summary>
+        public static readonly JsonSerializerSettings JsonSettings = new JsonSerializerSettings
+        {
+            StringEscapeHandling = Newtonsoft.Json.StringEscapeHandling.Default
+        };
+
+        /// <summary>
+        /// Get all loaded types across all non-dynamic assemblies.
+        /// </summary>
+        public static System.Collections.Generic.IEnumerable<System.Type> GetAllLoadedTypes()
+        {
+            return System.AppDomain.CurrentDomain.GetAssemblies()
+                .Where(a => !a.IsDynamic)
+                .SelectMany(a => { try { return a.GetTypes(); } catch { return System.Type.EmptyTypes; } });
+        }
+
+        /// <summary>
+        /// Get triangle count for a mesh without allocating the full triangles array.
+        /// </summary>
+        public static int GetTriangleCount(UnityEngine.Mesh mesh)
+        {
+            int count = 0;
+            for (int i = 0; i < mesh.subMeshCount; i++)
+                count += (int)mesh.GetIndexCount(i);
+            return count / 3;
         }
     }
 }
