@@ -506,7 +506,7 @@ namespace UnitySkills
             ReadOnly = true)]
         public static object CleanerGetDependencyTree(string assetPath, bool recursive = true)
         {
-            if (!File.Exists(assetPath) && !Directory.Exists(assetPath))
+            if (!SkillsCommon.PathExists(assetPath))
                 return new { error = $"Asset not found: {assetPath}" };
             var deps = AssetDatabase.GetDependencies(assetPath, recursive)
                 .Where(d => d != assetPath)

@@ -19,9 +19,10 @@ namespace UnitySkills
             MutatesAssets = true, RiskLevel = "medium")]
         public static object AssetImport(string sourcePath, string destinationPath)
         {
-            if (!File.Exists(sourcePath) && !Directory.Exists(sourcePath))
+            bool isDir = Directory.Exists(sourcePath);
+            if (!File.Exists(sourcePath) && !isDir)
                 return new { error = $"Source not found: {sourcePath}" };
-            if (Directory.Exists(sourcePath))
+            if (isDir)
                 return new { error = $"Source path must be a file, not a directory: {sourcePath}" };
             if (Validate.SafePath(destinationPath, "destinationPath") is object err) return err;
 
@@ -69,7 +70,7 @@ namespace UnitySkills
         public static object AssetDelete(string assetPath)
         {
             if (Validate.SafePath(assetPath, "assetPath", isDelete: true) is object err) return err;
-            if (!File.Exists(assetPath) && !Directory.Exists(assetPath))
+            if (!SkillsCommon.PathExists(assetPath))
                 return new { error = $"Asset not found: {assetPath}" };
 
             var asset = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(assetPath);

@@ -114,7 +114,7 @@ namespace UnitySkills
         {
             var safeErr = SafePath(path, paramName);
             if (safeErr != null) return safeErr;
-            if (!File.Exists(path) && !Directory.Exists(path))
+            if (!SkillsCommon.PathExists(path))
                 return new { error = $"Path does not exist: {path}" };
             return null;
         }
@@ -674,5 +674,9 @@ namespace UnitySkills
                 count += (int)mesh.GetIndexCount(i);
             return count / 3;
         }
+
+        /// <summary>True if the given path exists as either a file or a directory.</summary>
+        public static bool PathExists(string path) =>
+            !string.IsNullOrEmpty(path) && (File.Exists(path) || Directory.Exists(path));
     }
 }

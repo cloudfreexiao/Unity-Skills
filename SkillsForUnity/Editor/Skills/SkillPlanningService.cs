@@ -1333,10 +1333,14 @@ namespace UnitySkills
             AddErrorFromValidation(validation, Validate.Required(sourcePath, "sourcePath"), "sourcePath");
             AddErrorFromValidation(validation, Validate.Required(destinationPath, "destinationPath"), "destinationPath");
 
-            if (!string.IsNullOrEmpty(sourcePath) && !File.Exists(sourcePath) && !Directory.Exists(sourcePath))
-                AddSemanticError(validation, "sourcePath", $"Source not found: {sourcePath}");
-            if (!string.IsNullOrEmpty(sourcePath) && Directory.Exists(sourcePath))
-                AddSemanticError(validation, "sourcePath", $"Source path must be a file, not a directory: {sourcePath}");
+            if (!string.IsNullOrEmpty(sourcePath))
+            {
+                bool isDir = Directory.Exists(sourcePath);
+                if (!File.Exists(sourcePath) && !isDir)
+                    AddSemanticError(validation, "sourcePath", $"Source not found: {sourcePath}");
+                else if (isDir)
+                    AddSemanticError(validation, "sourcePath", $"Source path must be a file, not a directory: {sourcePath}");
+            }
             if (!string.IsNullOrEmpty(destinationPath) && Validate.SafePath(destinationPath, "destinationPath") is object dstErr)
                 AddSemanticError(validation, "destinationPath", ExtractError(dstErr));
 
@@ -1403,7 +1407,7 @@ namespace UnitySkills
             AddErrorFromValidation(validation, Validate.Required(assetPath, "assetPath"), "assetPath");
             if (!string.IsNullOrEmpty(assetPath) && Validate.SafePath(assetPath, "assetPath", isDelete: true) is object pathErr)
                 AddSemanticError(validation, "assetPath", ExtractError(pathErr));
-            if (!string.IsNullOrEmpty(assetPath) && !File.Exists(assetPath) && !Directory.Exists(assetPath))
+            if (!string.IsNullOrEmpty(assetPath) && !SkillsCommon.PathExists(assetPath))
                 AddSemanticError(validation, "assetPath", $"Asset not found: {assetPath}");
 
             if (plan != null)
@@ -1446,7 +1450,7 @@ namespace UnitySkills
                 {
                     if (Validate.SafePath(path, "path", isDelete: true) is object pathErr)
                         errors.Add(ExtractError(pathErr));
-                    if (!File.Exists(path) && !Directory.Exists(path))
+                    if (!SkillsCommon.PathExists(path))
                         errors.Add($"Asset not found: {path}");
                 }
 
@@ -1475,7 +1479,7 @@ namespace UnitySkills
                 AddSemanticError(validation, "sourcePath", ExtractError(srcErr));
             if (!string.IsNullOrEmpty(destinationPath) && Validate.SafePath(destinationPath, "destinationPath") is object dstErr)
                 AddSemanticError(validation, "destinationPath", ExtractError(dstErr));
-            if (!string.IsNullOrEmpty(sourcePath) && !File.Exists(sourcePath) && !Directory.Exists(sourcePath))
+            if (!string.IsNullOrEmpty(sourcePath) && !SkillsCommon.PathExists(sourcePath))
                 AddSemanticError(validation, "sourcePath", $"Asset not found: {sourcePath}");
             if (!string.IsNullOrEmpty(destinationPath) && AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(destinationPath) != null)
                 AddWarning(validation, $"Destination already exists and may cause move failure: {destinationPath}");
@@ -1866,13 +1870,11 @@ namespace UnitySkills
             }
         }
 
-        private static (GameObject go, object error) ResolveGameObject(JObject args)
-        {
-            var (_, name, instanceId, path) = ReadObjectLocator(args, "name", "instanceId", "path");
-            return GameObjectFinder.FindOrError(name, instanceId, path);
-        }
-
-        private static (GameObject go, object error) ResolveGameObject(JObject args, string nameKey, string instanceIdKey, string pathKey)
+        private static (GameObject go, object error) ResolveGameObject(
+            JObject args,
+            string nameKey = "name",
+            string instanceIdKey = "instanceId",
+            string pathKey = "path")
         {
             var (_, name, instanceId, path) = ReadObjectLocator(args, nameKey, instanceIdKey, pathKey);
             return GameObjectFinder.FindOrError(name, instanceId, path);
