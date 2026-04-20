@@ -2,6 +2,27 @@
 
 All notable changes to **UnitySkills** will be documented in this file.
 
+## [1.7.3] - 2026-04-20
+
+### Added
+- **Cinemachine 能力全面提升** — 新增 11 个 Skill（`cinemachine_set_priority`、`cinemachine_set_blend`、`cinemachine_set_brain`、`cinemachine_create_sequencer`、`cinemachine_sequencer_add_instruction`、`cinemachine_create_freelook`、`cinemachine_configure_camera_manager`、`cinemachine_configure_body`、`cinemachine_configure_aim`、`cinemachine_configure_extension`、`cinemachine_configure_impulse_source`），Cinemachine 技能总数从 23 增至 34，覆盖 Priority/Blend/Brain 配置、Sequencer/FreeLook 创建、Body/Aim 阶段统一配置、Extension 与 ImpulseSource 调节。
+- **纹理导入器扩展** — 新增 `texture_get_import_settings`、`texture_find_assets`、`texture_get_info`、`texture_find_by_size`、`texture_set_type`、`texture_set_platform_settings`、`texture_get_platform_settings`、`texture_set_sprite_settings`、`sprite_set_import_settings`，支持按尺寸查找纹理、逐平台覆盖设置、Sprite 专属配置等。
+- **音频导入器与场景技能扩展** — 新增 `audio_get_import_settings`、`audio_find_clips`、`audio_get_clip_info`、`audio_add_source`、`audio_get_source_info`、`audio_set_source_properties`、`audio_find_sources_in_scene`、`audio_create_mixer`，覆盖音频资产查询、AudioSource 场景管理和 AudioMixer 创建。
+- **模型导入器扩展** — 新增 `model_get_import_settings`、`model_find_assets`、`model_get_mesh_info`、`model_get_materials_info`、`model_get_animations_info`、`model_get_rig_info`、`model_set_animation_clips`、`model_set_rig`，覆盖网格统计、材质/动画/骨骼信息查询、动画片段分割与绑定模式切换。
+- **资产标签管理** — 新增 `asset_set_labels` 和 `asset_get_labels`，支持对资产设置和读取标签。
+
+### Changed
+- **CinemachineAdapter 架构抽象** — 新增 `CinemachineAdapter.cs` 适配层（562 行），将 Cinemachine 2.x 与 3.x 的 API 差异集中到适配器，`CinemachineSkills` 的业务方法不再包含条件编译，提高可维护性和可读性。
+- **GameObjectFinder 增强** — 新增 `SafePathExists` 验证方法和 `EnsureDirectoryExists` 辅助方法，统一资产路径校验逻辑。
+- **SkillPlanningService 批量分析重构** — 引入 `BatchAnalyzeContext` 上下文对象，将批量操作的 item 解析、错误收集、计划构建统一封装，消除多个 `Analyze*Batch` 方法间的重复代码。
+- **UIToolkitSkills / GameObjectSkills 代码质量提升** — 提取公共 helper、消除重复模式、补全日志记录。
+
+### Docs
+- **importer 模块文档大幅扩展** — `importer/SKILL.md` 从基础导入设置扩展到涵盖查询、运行时、平台覆盖、动画/骨骼等完整能力矩阵。
+- **cinemachine 模块文档补全** — `cinemachine/SKILL.md` 新增全部 11 个 Skill 的参数文档。
+- **asset 模块文档更新** — `asset/SKILL.md` 新增 `asset_set_labels`、`asset_get_labels` 文档。
+- **版本号更新** — `SkillsLogger.Version`、`package.json`、Python helper 和文档同步提升到 `1.7.3`。
+
 ## [1.7.2] - 2026-04-18
 
 ### Changed
