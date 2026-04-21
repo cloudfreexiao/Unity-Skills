@@ -1,6 +1,6 @@
 ---
 name: unity-skills-index
-description: "Index of all Unity Skills modules — 42 functional modules (SA/FA) + 14 advisory modules. Browse available skills, check mode requirements, and find the right module. Triggers: module list, skill index, browse skills, find module, 模块列表, 技能索引, 查找模块."
+description: "Index of all Unity Skills modules — 43 functional modules (SA/FA) + 15 advisory modules. Browse available skills, check mode requirements, and find the right module. Triggers: module list, skill index, browse skills, find module, 模块列表, 技能索引, 查找模块."
 ---
 
 # Unity Skills - Module Index
@@ -57,6 +57,7 @@ Module docs. Start with [../SKILL.md](../SKILL.md) for mode switching and schema
 | [history](./history/SKILL.md) | FA | Undo/redo history | No |
 | [scriptableobject](./scriptableobject/SKILL.md) | FA | ScriptableObject assets | No |
 | [netcode](./netcode/SKILL.md) | FA | Netcode for GameObjects setup, prefabs, lifecycle, host/server/client | Yes |
+| [yooasset](./yooasset/SKILL.md) | Both | YooAsset hot-update: build bundles, Collector config, BuildReport analysis | Yes |
 
 ## Advisory Design Modules
 
@@ -78,6 +79,7 @@ These modules provide design guidance only.
 | [inspector](./inspector/SKILL.md) | Design authoring UX |
 | [scriptdesign](./scriptdesign/SKILL.md) | Review script structure |
 | [netcode-design](./netcode-design/SKILL.md) | Netcode source-anchored rules (lifecycle/ownership/RPC/variables/spawn/scene/transport/pitfalls) |
+| [yooasset-design](./yooasset-design/SKILL.md) | YooAsset v2.3.18 source-anchored rules (init/playmode/handles/loading/update/filesystem/build/pitfalls) |
 
 ## Batch-First Rule
 

@@ -1,6 +1,6 @@
 # UnitySkills — AI Agent 项目速览
 
-> 通过 REST API 让 AI 直接控制 Unity 编辑器。576 个 REST Skills + 14 个 Advisory 模块。
+> 通过 REST API 让 AI 直接控制 Unity 编辑器。592 个 REST Skills + 15 个 Advisory 模块。
 
 | 项目 | 值 |
 |------|----|
@@ -98,7 +98,7 @@ public static object SkillName(string name, float x = 0) { ... }
 
 ---
 
-## Skills 模块 (42 个功能模块, 576 Skills)
+## Skills 模块 (43 个功能模块, 592 Skills)
 
 | 模块 | 数量 | 模块 | 数量 | 模块 | 数量 |
 |------|:----:|------|:----:|------|:----:|
@@ -115,13 +115,14 @@ public static object SkillName(string name, float x = 0) { ... }
 | Console | 10 | Debug | 10 | Event | 10 |
 | Smart | 10 | Test | 11 | Optimization | 10 |
 | Profiler | 10 | Light | 10 | Validation | 10 |
-| Animator | 10 | Sample | 8 | | |
+| Animator | 10 | Sample | 8 | Netcode* | 33 |
+| YooAsset* | 16 | | | | |
 
-*ProBuilder 需 `com.unity.probuilder`，XR 需 `com.unity.xr.interaction.toolkit`
+*ProBuilder 需 `com.unity.probuilder`，XR 需 `com.unity.xr.interaction.toolkit`，Netcode 需 `com.unity.netcode.gameobjects`，YooAsset 需 `com.tuyoogame.yooasset (≥2.3.15)`
 
 > 大部分模块支持 `*_batch` 批量操作，操作 2+ 物体时应优先使用。
 
-**Advisory 模块 (13)**：architecture, patterns, performance, asmdef, async, inspector, blueprints, adr, project-scout, scene-contracts, script-roles, scriptdesign, testability — 纯架构/设计指导，无 REST Skills。
+**Advisory 模块 (15)**：architecture, patterns, performance, asmdef, async, inspector, blueprints, adr, project-scout, scene-contracts, script-roles, scriptdesign, testability, netcode-design, yooasset-design — 纯架构/设计指导，无 REST Skills。
 
 ---
 

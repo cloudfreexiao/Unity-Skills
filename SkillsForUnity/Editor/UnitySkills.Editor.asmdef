@@ -9,7 +9,9 @@
         "Unity.Splines",
         "Unity.ProBuilder",
         "Unity.ProBuilder.Editor",
-        "Unity.Netcode.Runtime"
+        "Unity.Netcode.Runtime",
+        "YooAsset",
+        "YooAsset.Editor"
     ],
     "includePlatforms": ["Editor"],
     "excludePlatforms": [],
@@ -53,6 +55,11 @@
             "name": "com.unity.netcode.gameobjects",
             "expression": "[2.0,3.0)",
             "define": "NETCODE_GAMEOBJECTS"
+        },
+        {
+            "name": "com.tuyoogame.yooasset",
+            "expression": "[2.3.15,3.0)",
+            "define": "YOO_ASSET"
         }
     ],
     "noEngineReferences": false
