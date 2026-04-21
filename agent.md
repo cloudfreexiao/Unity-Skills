@@ -1,6 +1,6 @@
 # UnitySkills — AI Agent 项目速览
 
-> 通过 REST API 让 AI 直接控制 Unity 编辑器。592 个 REST Skills + 15 个 Advisory 模块。
+> 通过 REST API 让 AI 直接控制 Unity 编辑器。592 个 REST Skills + 16 个 Advisory 模块。
 
 | 项目 | 值 |
 |------|----|
@@ -122,7 +122,7 @@ public static object SkillName(string name, float x = 0) { ... }
 
 > 大部分模块支持 `*_batch` 批量操作，操作 2+ 物体时应优先使用。
 
-**Advisory 模块 (15)**：architecture, patterns, performance, asmdef, async, inspector, blueprints, adr, project-scout, scene-contracts, script-roles, scriptdesign, testability, netcode-design, yooasset-design — 纯架构/设计指导，无 REST Skills。
+**Advisory 模块 (16)**：architecture, patterns, performance, asmdef, async, inspector, blueprints, adr, project-scout, scene-contracts, script-roles, scriptdesign, testability, netcode-design, yooasset-design, addressables-design — 纯架构/设计指导，无 REST Skills。
 
 ---
 

@@ -80,6 +80,7 @@ These modules provide design guidance only.
 | [scriptdesign](./scriptdesign/SKILL.md) | Review script structure |
 | [netcode-design](./netcode-design/SKILL.md) | Netcode source-anchored rules (lifecycle/ownership/RPC/variables/spawn/scene/transport/pitfalls) |
 | [yooasset-design](./yooasset-design/SKILL.md) | YooAsset v2.3.18 source-anchored rules (init/playmode/handles/loading/update/filesystem/build/pitfalls) |
+| [addressables-design](./addressables-design/SKILL.md) | Addressables dual-version (1.22.3 Unity 2022 / 2.9.1 Unity 6) source-anchored rules (init/handles/loading/scene/update/download/assetref/pitfalls) with migration table |
 
 ## Batch-First Rule
 
