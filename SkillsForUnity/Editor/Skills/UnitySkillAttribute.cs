@@ -50,7 +50,13 @@ namespace UnitySkills
         Sample,
         Netcode,
         YooAsset,
-        DOTween
+        DOTween,
+        Graphics,
+        Volume,
+        URP,
+        Decal,
+        PostProcess,
+        ShaderGraph
     }
 
     /// <summary>

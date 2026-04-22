@@ -30,6 +30,11 @@ Module docs. Start with [../SKILL.md](../SKILL.md) for mode switching and schema
 | [editor](./editor/SKILL.md) | SA | Play/select/undo/redo | No |
 | [animator](./animator/SKILL.md) | FA | Animator controllers | No |
 | [shader](./shader/SKILL.md) | FA | Shader create/list | No |
+| [graphics](./graphics/SKILL.md) | FA | GraphicsSettings / QualitySettings / SRP assets | No |
+| [volume](./volume/SKILL.md) | FA | Volume / VolumeProfile / VolumeComponent | No |
+| [postprocess](./postprocess/SKILL.md) | FA | Modern URP/HDRP post-processing | No |
+| [urp](./urp/SKILL.md) | FA | URP asset / renderer / renderer features | No |
+| [decal](./decal/SKILL.md) | FA | URP Decal Projector workflow | Yes |
 | [console](./console/SKILL.md) | SA | Log capture/filter | No |
 | [validation](./validation/SKILL.md) | FA | Broken reference checks | No |
 | [importer](./importer/SKILL.md) | FA | Texture/audio/model import | Yes |

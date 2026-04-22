@@ -1,6 +1,6 @@
 ---
 name: unity-project
-description: "Project information. Use when users want to get project settings, quality settings, or shader lists. Triggers: project, settings, quality, build, configuration, Unity项目, Unity设置, Unity质量, Unity构建."
+description: "Project information. Use when users want to get project info, packages, player settings, layers, tags, or shader lists. Triggers: project, settings, build, configuration, Unity项目, Unity设置, Unity构建."
 ---
 
 # Project Skills
@@ -18,6 +18,7 @@ Project information and configuration.
 - `project_create` does not exist → projects are created via Unity Hub, not REST API
 
 **Routing**:
+- For graphics / quality / SRP configuration → use the `graphics` module
 - For Layer/Tag management → `project_add_tag` (this module); Layers are read-only via `project_get_layers` (edit via `editor_execute_menu` → `Edit/Project Settings...`)
 - For build settings → `project_get_build_settings` (read-only; use `editor_execute_menu` → `File/Build Settings...` to edit)
 
@@ -36,10 +37,6 @@ List all available shaders in the project.
 **Parameters:**
 - `filter` (string, optional): Filter by name.
 - `limit` (int, optional): Max results (default 50).
-
-### `project_get_quality_settings`
-Get current quality settings.
-**Parameters:** None.
 
 ### `project_get_build_settings`
 Get build settings (platform, scenes).
@@ -84,16 +81,6 @@ Get Player Settings.
 **Parameters:** None.
 
 **Returns:** `{ success, productName, companyName, bundleVersion, defaultScreenWidth, defaultScreenHeight, fullscreen, apiCompatibility, scriptingBackend }`
-
-### `project_set_quality_level`
-Switch quality level by index or name.
-
-| Parameter | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| level | int | No | -1 | Quality level index |
-| levelName | string | No | null | Quality level name |
-
-**Returns:** `{ success, level, name }`
 
 ---
 ## Exact Signatures

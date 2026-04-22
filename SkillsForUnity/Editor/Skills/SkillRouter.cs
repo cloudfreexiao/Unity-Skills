@@ -231,6 +231,7 @@ namespace UnitySkills
             {"audio", SkillCategory.Audio}, {"音频", SkillCategory.Audio}, {"声音", SkillCategory.Audio},
             {"texture", SkillCategory.Texture}, {"贴图", SkillCategory.Texture},
             {"shader", SkillCategory.Shader}, {"着色器", SkillCategory.Shader},
+            {"shadergraph", SkillCategory.ShaderGraph}, {"subgraph", SkillCategory.ShaderGraph}, {"着色图", SkillCategory.ShaderGraph}, {"子图", SkillCategory.ShaderGraph},
             {"terrain", SkillCategory.Terrain}, {"地形", SkillCategory.Terrain},
             {"navmesh", SkillCategory.NavMesh}, {"导航", SkillCategory.NavMesh},
             {"model", SkillCategory.Model}, {"模型", SkillCategory.Model},
