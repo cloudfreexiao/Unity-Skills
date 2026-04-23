@@ -104,6 +104,36 @@ namespace UnitySkills.Tests.Core
             AssertNoIssues(issues, "UnitySkill 元数据不完整");
         }
 
+        [Test]
+        public void YooAssetSkills_ShouldHaveEnglishAndChineseLocalization()
+        {
+            var yooAssetSkillNames = LoadCodeSkills()
+                .Keys
+                .Where(name => name.StartsWith("yooasset_", StringComparison.Ordinal))
+                .OrderBy(name => name, StringComparer.Ordinal)
+                .ToArray();
+            Assert.That(yooAssetSkillNames, Is.Not.Empty, "未发现 YooAsset Skill。");
+
+            var english = GetLocalizationDictionary("_english");
+            var chinese = GetLocalizationDictionary("_chinese");
+            var issues = new List<string>();
+
+            foreach (var skillName in yooAssetSkillNames)
+            {
+                if (!english.TryGetValue(skillName, out var englishText) || string.IsNullOrWhiteSpace(englishText))
+                {
+                    issues.Add($"缺少英文翻译: `{skillName}`");
+                }
+
+                if (!chinese.TryGetValue(skillName, out var chineseText) || string.IsNullOrWhiteSpace(chineseText))
+                {
+                    issues.Add($"缺少中文翻译: `{skillName}`");
+                }
+            }
+
+            AssertNoIssues(issues, "YooAsset Skill 本地化不完整");
+        }
+
         private static void CompareParameters(string skillName, CodeSkill codeSkill, DocSkill docSkill, List<string> issues)
         {
             var codeParams = codeSkill.Parameters;
@@ -545,6 +575,16 @@ namespace UnitySkills.Tests.Core
             }
 
             return projectDocsRoot;
+        }
+
+        private static Dictionary<string, string> GetLocalizationDictionary(string fieldName)
+        {
+            var field = typeof(Localization).GetField(fieldName, BindingFlags.NonPublic | BindingFlags.Static);
+            Assert.That(field, Is.Not.Null, $"未找到 Localization.{fieldName}");
+
+            var dictionary = field.GetValue(null) as Dictionary<string, string>;
+            Assert.That(dictionary, Is.Not.Null, $"Localization.{fieldName} 类型不是 Dictionary<string, string>");
+            return dictionary;
         }
 
         private static void AssertNoIssues(List<string> issues, string title)

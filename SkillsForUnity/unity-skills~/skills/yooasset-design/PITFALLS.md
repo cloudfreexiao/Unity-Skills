@@ -100,10 +100,10 @@ A separate `## Legacy API migration` section at the bottom lists pre-2.3.18 call
 - Source: `Runtime/ResourcePackage/ResourcePackage.cs:1183-1186`
 - ✅ Fix: wrap your data in a `ScriptableObject` or load raw bytes via `LoadRawFileAsync`
 
-### ❌ P17. Hallucinating `YooAssets.LoadAsset(...)` (static)
-- Symptom: compile error — method does not exist on the static class
-- Source: `Runtime/YooAssets.cs` (the whole file — no `Load*` member)
-- ✅ Fix: `var pkg = YooAssets.GetPackage("…"); pkg.LoadAssetAsync<T>(location)`
+### ❌ P17. Calling default-package `YooAssets.LoadAssetAsync(...)` before `SetDefaultPackage`
+- Symptom: runtime exception: `Default package is null. Please use SetDefaultPackage !`
+- Source: `Runtime/YooAssetsExtension.cs:16, 260-295, 612-616`
+- ✅ Fix: prefer `var pkg = YooAssets.GetPackage("…"); pkg.LoadAssetAsync<T>(location)` or call `YooAssets.SetDefaultPackage(pkg)` before using static shortcuts
 
 ### ❌ P18. Loading without specifying a generic type, then casting
 - Symptom: `GetAssetObject<Sprite>()` returns null because the provider's `AssetObject` was resolved as `UnityEngine.Object`
@@ -197,7 +197,8 @@ These are frequent training-data hallucinations. If you catch yourself typing on
 | `package.CreateResourceDownloader(10, 3, timeout: 60)` | The `timeout` parameter was removed in 2.3.16 (`CHANGELOG.md:173-177`). No such overload exists in 2.3.18. | Set `DOWNLOAD_WATCH_DOG_TIME` on `CacheFileSystemParameters` via `AddParameter` |
 | `ResourceDownloaderOperation.timeout = 60` | Same as above — removed. | Same as above |
 | `UpdatePackageVersionOperation` / `pkg.UpdatePackageVersionAsync()` | The class/method does not exist. | `RequestPackageVersionOperation op = pkg.RequestPackageVersionAsync(); var v = op.PackageVersion;` |
-| `YooAssets.LoadAsset(...)` / `YooAssets.LoadAssetAsync(...)` | `YooAssets` is static; load APIs live on `ResourcePackage`. | `var pkg = YooAssets.GetPackage("…"); pkg.LoadAssetAsync<T>(location);` |
+| `YooAssets.LoadAsset(...)` | Bare `LoadAsset` does not exist; YooAsset exposes `LoadAssetSync` / `LoadAssetAsync`. | `var pkg = YooAssets.GetPackage("…"); pkg.LoadAssetAsync<T>(location);` |
+| Treating `YooAssets.LoadAssetAsync(...)` as nonexistent | Outdated rule. 2.3.18 has default-package static shortcuts in `YooAssetsExtension.cs`. | Prefer explicit `ResourcePackage`; if using the shortcut, call `YooAssets.SetDefaultPackage(pkg)` first. |
 | `pkg.UnloadUnusedAssets()` (synchronous) | Does not exist. The sync `TryUnloadUnusedAsset(location)` only targets one asset. | `pkg.UnloadUnusedAssetsAsync(loopCount: 10)` — returns an `UnloadUnusedAssetsOperation` |
 | `class MyFilterRule : IFilterRule { bool IsCollectAsset(...) … }` (no `FindAssetType`) | `FindAssetType` is required since 2.3.16. | Add `public string FindAssetType => "t:Prefab";` |
 | `handle.OnValueChanged += ...` | YooAsset has no `OnValueChanged` hook; this is Netcode vocabulary. | `handle.Completed += OnLoaded;` or `await handle.Task;` |

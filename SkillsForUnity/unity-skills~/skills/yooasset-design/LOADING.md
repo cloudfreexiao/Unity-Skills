@@ -1,6 +1,6 @@
 # YooAsset - Loading Assets, Scenes, Raw Files
 
-All rules come from `Runtime/ResourcePackage/ResourcePackage.cs:516-964` and `Runtime/ResourcePackage/ResourcePackage.cs:1172-1187` (the type guard).
+All rules come from `Runtime/ResourcePackage/ResourcePackage.cs:516-964`, `Runtime/YooAssetsExtension.cs:16, 217-506`, and `Runtime/ResourcePackage/ResourcePackage.cs:1172-1187` (the type guard).
 
 ## Five load families
 
@@ -12,7 +12,7 @@ All rules come from `Runtime/ResourcePackage/ResourcePackage.cs:516-964` and `Ru
 | `RawFileHandle` | `LoadRawFileSync` | `LoadRawFileAsync` | Plain bytes/text from a raw-file bundle |
 | `SceneHandle` | `LoadSceneSync` | `LoadSceneAsync` | Unity scene load |
 
-Every call is an instance method on `ResourcePackage`; there is no `YooAssets.LoadAsset(...)` static shortcut.
+Every load family is available as an instance method on `ResourcePackage`. YooAsset 2.3.18 also exposes default-package static shortcuts on `YooAssets` via `YooAssetsExtension.cs`; use them only after `YooAssets.SetDefaultPackage(package)`. Prefer explicit `ResourcePackage` references in multi-package code, libraries, and tests.
 
 ## Three ways to address an asset
 
@@ -42,6 +42,22 @@ public AssetHandle LoadAssetAsync(AssetInfo assetInfo, uint priority = 0);      
 public AssetHandle LoadAssetAsync<TObject>(string location, uint priority = 0) where TObject : UnityEngine.Object;  // :701
 public AssetHandle LoadAssetAsync(string location, System.Type type, uint priority = 0);           // :714
 public AssetHandle LoadAssetAsync(string location, uint priority = 0);                             // :726
+```
+
+### Default-package static shortcuts
+
+```csharp
+// YooAssetsExtension.cs:16, 217-295 — delegates to the default ResourcePackage
+YooAssets.SetDefaultPackage(package);
+AssetHandle h1 = YooAssets.LoadAssetAsync<GameObject>("player");
+AssetHandle h2 = YooAssets.LoadAssetSync("ui/icon", typeof(Sprite));
+```
+
+These shortcuts are valid in YooAsset 2.3.18, but they hide package ownership. If a project has more than one package, pass the `ResourcePackage` explicitly:
+
+```csharp
+var package = YooAssets.GetPackage("DefaultPackage");
+var h = package.LoadAssetAsync<GameObject>("player");
 ```
 
 ### The Type guard you must not fight
@@ -188,18 +204,22 @@ h.Release();
 
 Source: `Runtime/ResourcePackage/ResourcePackage.cs:1178-1186`.
 
-### 2. `YooAssets.LoadAssetAsync(...)` (static shortcut that doesn't exist)
+### 2. Using `YooAssets.LoadAssetAsync(...)` before setting the default package
 
 ```csharp
-// ❌ WRONG — YooAssets (static) has no Load*Async methods
+// ❌ WRONG — default package is null; DebugCheckDefaultPackageValid throws
 YooAssets.LoadAssetAsync<GameObject>("player");
 
-// ✅ CORRECT
+// ✅ CORRECT — explicit package, preferred for clarity
 var package = YooAssets.GetPackage("DefaultPackage");
 var h = package.LoadAssetAsync<GameObject>("player");
+
+// ✅ ALSO VALID — default-package shortcut
+YooAssets.SetDefaultPackage(package);
+var h2 = YooAssets.LoadAssetAsync<GameObject>("player");
 ```
 
-Source: `Runtime/YooAssets.cs` — the only static entry points are `Initialize / Destroy / *Package / StartOperation / SetDownloadSystemUnityWebRequest / SetOperationSystemMaxTimeSlice`.
+Source: `Runtime/YooAssetsExtension.cs:16, 260-295, 612-616`.
 
 ### 3. Using `UnityEngine.SceneManagement.SceneManager.LoadScene` on a YooAsset scene
 

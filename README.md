@@ -6,7 +6,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/Unity-2022.3%2B-black?style=for-the-badge&logo=unity" alt="Unity">
-  <img src="https://img.shields.io/badge/Skills-588-green?style=for-the-badge" alt="Skills">
+  <img src="https://img.shields.io/badge/Skills-737-green?style=for-the-badge" alt="Skills">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-orange?style=for-the-badge" alt="License"></a>
   <a href="README_CN.md"><img src="https://img.shields.io/badge/README-中文-blue?style=for-the-badge" alt="中文"></a>
 </p>
@@ -30,7 +30,7 @@ This project is a deep refactoring and feature extension based on the excellent 
 
 ## 🚀 Core Features
 
-- 🛠️ **588 REST Skills Comprehensive Toolkit**: Includes 14 advisory design modules with Batch operations for multi-object control.
+- 🛠️ **737 REST Skills Comprehensive Toolkit**: Includes 19 advisory design modules with Batch operations for multi-object control.
 - 🎛️ **Dual-Mode Flexibility**: Switch between Semi-Auto (code-first) and Full-Auto (direct manipulation) for different workflows.
 - 🤖 **4 Major IDEs Native Support**: Claude Code / Antigravity / Gemini CLI / Codex — one-click install and use.
 - 🛡️ **Transactional Atomicity**: Failed operations auto-rollback, leaving scenes clean and safe.
@@ -45,13 +45,13 @@ This project is a deep refactoring and feature extension based on the excellent 
 | Mode | Default | Available Skills | Use Case |
 |:-----|:-------:|:----------------:|:---------|
 | **Semi-Auto** | ✅ | ~80 | AI writes C# code + light Skills assist (script, perception, scene, editor, asset, workflow, debug) |
-| **Full-Auto** | — | All 588 | AI directly manipulates Unity (create objects, configure materials/lights/UI, build scenes) |
+| **Full-Auto** | — | All 737 | AI directly manipulates Unity (create objects, configure materials/lights/UI, build scenes) |
 
 **How to switch**:
 - → Full-Auto: `"full auto"` / `"full-auto mode"` / `"build the scene for me"` / `"directly manipulate Unity"`
 - → Semi-Auto: `"semi-auto"` / `"code-first"` — each new session defaults to Semi-Auto
 
-> 14 advisory design modules (architecture, performance, design patterns, testability, etc.) are available in both modes and loaded on demand.
+> 19 advisory design modules (architecture, performance, design patterns, testability, package-specific source rules, etc.) are available in both modes and loaded on demand.
 
 ---
 
@@ -162,7 +162,7 @@ If you're using other tools that support Skills, install according to the Skills
 ---
 
 <details>
-<summary><h2>📦 Skills Category Overview (588)</h2></summary>
+<summary><h2>📦 Skills Category Overview (737)</h2></summary>
 
 | Category | Count | Core Functions |
 | :--- | :---: | :--- |
@@ -206,11 +206,12 @@ If you're using other tools that support Skills, install according to the Skills
 | **Perception** | 18 | Scene summary/health checks/stack detection/context export/dependency analysis/hotspots/diff/tag-layer stats/performance hints |
 | **ProBuilder** | 22 | ProBuilder shape creation/face-edge operations/UV tools/pivot edits/batch creation/mesh combination |
 | **XR** | 22 | XR rig setup/interactors/interactables/teleportation/continuous move/UI/haptics/interaction layers |
+| **YooAsset** | 40 | Hot-update bundle builds/Collector full CRUD/BuildReport asset and dependency analysis/PlayMode runtime validation/Reporter-Debugger-AssetArtScanner tools |
 | **Sample** | 8 | Basic examples: Create/Delete/Transform/Scene info |
 
 > ⚠️ Most modules support `*_batch` batch operations. When operating on multiple objects, prioritize batch Skills for better performance.
 >
-> 🧠 `unity-skills/skills/` also includes **14 advisory design modules** for architecture, script design, performance, maintainability, and Inspector guidance.
+> 🧠 `unity-skills/skills/` also includes **19 advisory design modules** for architecture, script design, performance, maintainability, Inspector guidance, and package-specific source rules.
 
 </details>
 
@@ -226,9 +227,9 @@ If you're using other tools that support Skills, install according to the Skills
 │   │   ├── SKILL.md                # Main Skill Definitions (AI-readable)
 │   │   ├── scripts/
 │   │   │   └── unity_skills.py     # Python Client Library
-│   │   ├── skills/                 # Modular Skill Documentation + 14 advisory modules
+│   │   ├── skills/                 # Modular Skill Documentation + 19 advisory modules
 │   │   └── references/             # Unity Development References
-│   └── Editor/Skills/              # Core Skill Logic (42 *Skills.cs files, 588 Skills)
+│   └── Editor/Skills/              # Core Skill Logic (50 *Skills.cs files, 737 Skills)
 │       ├── SkillsHttpServer.cs     # HTTP Server Core (Producer-Consumer)
 │       ├── SkillRouter.cs          # Request Routing & Reflection-based Skill Discovery
 │       ├── WorkflowManager.cs      # Persistent Workflow (Task/Session/Snapshot)
@@ -240,7 +241,7 @@ If you're using other tools that support Skills, install according to the Skills
 │       ├── CinemachineSkills.cs    # Cinemachine 2.x/3.x (23 skills)
 │       ├── WorkflowSkills.cs       # Workflow Undo/Rollback (23 skills)
 │       ├── PerceptionSkills.cs     # Scene Understanding (18 skills)
-│       └── ...                     # 588 Skills source code
+│       └── ...                     # 737 Skills source code
 ├── docs/
 │   └── SETUP_GUIDE.md              # Complete Setup & Usage Guide
 ├── CHANGELOG.md                    # Version Update Log

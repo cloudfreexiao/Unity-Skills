@@ -50,7 +50,7 @@ Source: `Runtime/YooAssets.cs:69-87, 103-110`.
 
 ## Core APIs (verbatim from source)
 
-### YooAssets (static)
+### YooAssets (static core)
 
 ```csharp
 public static bool Initialized { get; }                                    // :29
@@ -69,6 +69,21 @@ public static void SetOperationSystemMaxTimeSlice(long milliseconds);           
 ```
 
 All of the above live in namespace `YooAsset` (file-scoped at `Runtime/YooAssets.cs:8`).
+
+### YooAssets default-package shortcuts
+
+`YooAssetsExtension.cs` adds a default package layer on top of the core static class:
+
+```csharp
+public static void SetDefaultPackage(ResourcePackage package);                 // YooAssetsExtension.cs:16
+public static AssetHandle LoadAssetSync<TObject>(string location);             // :228
+public static AssetHandle LoadAssetAsync<TObject>(string location, uint priority = 0);  // :271
+public static RawFileHandle LoadRawFileAsync(string location, uint priority = 0);        // :151
+public static SceneHandle LoadSceneAsync(string location, ...);                // :191
+public static ResourceDownloaderOperation CreateResourceDownloader(int downloadingMaxNumber, int failedTryAgain);  // :479
+```
+
+These methods are real in YooAsset 2.3.18. They throw if no default package has been assigned (`DebugCheckDefaultPackageValid`, `YooAssetsExtension.cs:612-616`). Prefer explicit `ResourcePackage` references in reusable code and multi-package projects.
 
 ### ResourcePackage (instance)
 

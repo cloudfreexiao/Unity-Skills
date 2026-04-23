@@ -16,7 +16,7 @@ For exact skill names, parameters, defaults, and returns, query schema first:
 
 Use module `SKILL.md` files for routing guidance, guardrails, and minimal examples, not as the canonical source of exact signatures.
 
-Current snapshot: `588` REST skills, `43` functional modules, `14` advisory modules, Unity `2022.3+`, default timeout `15 minutes`.
+Current snapshot: `737` REST skills, `50` functional modules, `19` advisory modules, Unity `2022.3+`, default timeout `15 minutes`.
 
 Python helper: `unity-skills/scripts/unity_skills.py`
 
@@ -49,7 +49,7 @@ Activate all Full-Auto skills when user explicitly says:
 | Asset Basic | asset | asset_refresh, asset_find, asset_get_info |
 | Workflow | workflow | workflow_task_start/end, workflow_undo_task |
 | Debug | debug, console | debug_check_compilation, console_get_logs |
-| Advisory | 13 modules | Design-only guidance modules (no REST skills) |
+| Advisory | 19 modules | Design-only guidance modules (no REST skills) |
 
 ## Core Rules
 

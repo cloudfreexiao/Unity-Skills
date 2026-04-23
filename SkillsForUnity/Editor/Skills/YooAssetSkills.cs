@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Collections.Generic;
+using Newtonsoft.Json;
 
 #if YOO_ASSET
 using YooAsset;
@@ -23,6 +24,56 @@ namespace UnitySkills
     /// </summary>
     public static class YooAssetSkills
     {
+        private sealed class RuntimeValidationJob
+        {
+            public string JobId;
+            public string PackageName;
+            public string AssetLocation;
+            public bool RestoreEditMode;
+            public bool StartedPlayMode;
+            public bool Cleanup;
+            public bool CheckDownloader;
+            public int DownloadingMaxNumber;
+            public int FailedTryAgain;
+            public string Status = "queued";
+            public string Stage = "queued";
+            public int Progress;
+            public string Error;
+            public Dictionary<string, object> Result = new Dictionary<string, object>();
+#if YOO_ASSET
+            public ResourcePackage Package;
+            public InitializationOperation InitializeOperation;
+            public RequestPackageVersionOperation RequestVersionOperation;
+            public UpdatePackageManifestOperation UpdateManifestOperation;
+            public AssetHandle AssetHandle;
+            public ResourceDownloaderOperation Downloader;
+            public DestroyOperation DestroyOperation;
+#endif
+        }
+
+        private static readonly Dictionary<string, RuntimeValidationJob> RuntimeValidationJobs =
+            new Dictionary<string, RuntimeValidationJob>(StringComparer.OrdinalIgnoreCase);
+        private static bool _runtimeValidationUpdateHooked;
+        private const string RuntimeValidationJobsPrefKey = "UnitySkills_YooAsset_RuntimeValidationJobs_v1";
+
+        private sealed class RuntimeValidationJobState
+        {
+            public string JobId;
+            public string PackageName;
+            public string AssetLocation;
+            public bool RestoreEditMode;
+            public bool StartedPlayMode;
+            public bool Cleanup;
+            public bool CheckDownloader;
+            public int DownloadingMaxNumber;
+            public int FailedTryAgain;
+            public string Status;
+            public string Stage;
+            public int Progress;
+            public string Error;
+            public Dictionary<string, object> Result;
+        }
+
 #if !YOO_ASSET
         private static object NoYooAsset() => new
         {
@@ -110,6 +161,17 @@ namespace UnitySkills
             bool useAssetDependencyDB = true,
             bool verifyBuildingResult = true,
             bool replaceAssetPathWithAddress = false,
+            bool stripUnityVersion = false,
+            bool disableWriteTypeTree = false,
+            bool trackSpriteAtlasDependencies = false,
+            bool writeLinkXML = true,
+            string cacheServerHost = "",
+            int cacheServerPort = 0,
+            string builtinShadersBundleName = "",
+            string monoScriptsBundleName = "",
+            bool includePathInHash = false,
+            string buildinFileCopyOption = "None",
+            string buildinFileCopyParams = "",
             bool enableLog = true)
         {
 #if !YOO_ASSET
@@ -147,7 +209,15 @@ namespace UnitySkills
                 var sbp = new ScriptableBuildParameters
                 {
                     CompressOption = eCompress,
-                    ReplaceAssetPathWithAddress = replaceAssetPathWithAddress
+                    ReplaceAssetPathWithAddress = replaceAssetPathWithAddress,
+                    StripUnityVersion = stripUnityVersion,
+                    DisableWriteTypeTree = disableWriteTypeTree,
+                    TrackSpriteAtlasDependencies = trackSpriteAtlasDependencies,
+                    WriteLinkXML = writeLinkXML,
+                    CacheServerHost = string.IsNullOrWhiteSpace(cacheServerHost) ? null : cacheServerHost,
+                    CacheServerPort = cacheServerPort,
+                    BuiltinShadersBundleName = string.IsNullOrWhiteSpace(builtinShadersBundleName) ? null : builtinShadersBundleName,
+                    MonoScriptsBundleName = string.IsNullOrWhiteSpace(monoScriptsBundleName) ? null : monoScriptsBundleName
                 };
                 buildParameters = sbp;
                 iPipeline = new ScriptableBuildPipeline();
@@ -155,7 +225,10 @@ namespace UnitySkills
             }
             else if (eBp == EBuildPipeline.RawFileBuildPipeline)
             {
-                buildParameters = new RawFileBuildParameters();
+                buildParameters = new RawFileBuildParameters
+                {
+                    IncludePathInHash = includePathInHash
+                };
                 iPipeline = new RawFileBuildPipeline();
                 buildBundleType = (int)EBuildBundleType.RawBundle;
             }
@@ -175,8 +248,10 @@ namespace UnitySkills
             buildParameters.ClearBuildCacheFiles = clearBuildCache;
             buildParameters.UseAssetDependencyDB = useAssetDependencyDB;
             buildParameters.VerifyBuildingResult = verifyBuildingResult;
-            buildParameters.BuildinFileCopyOption = EBuildinFileCopyOption.None;
-            buildParameters.BuildinFileCopyParams = string.Empty;
+            if (!Enum.TryParse<EBuildinFileCopyOption>(buildinFileCopyOption, out var eCopy))
+                return new { error = $"Unknown buildinFileCopyOption: {buildinFileCopyOption}. Available: {string.Join(", ", Enum.GetNames(typeof(EBuildinFileCopyOption)))}" };
+            buildParameters.BuildinFileCopyOption = eCopy;
+            buildParameters.BuildinFileCopyParams = buildinFileCopyParams ?? string.Empty;
 
             BuildResult result;
             try
@@ -197,7 +272,8 @@ namespace UnitySkills
                 buildTarget = target.ToString(),
                 outputDirectory = result.OutputPackageDirectory,
                 errorInfo = result.ErrorInfo,
-                failedTask = result.FailedTask
+                failedTask = result.FailedTask,
+                reportPath = result.Success ? Path.Combine(result.OutputPackageDirectory, $"{packageName}_{version}.report") : null
             };
 #endif
         }
@@ -258,6 +334,89 @@ namespace UnitySkills
 #endif
         }
 
+        [UnitySkill("yooasset_get_build_settings",
+            "Read YooAsset AssetBundle Builder EditorPrefs for a package and pipeline.",
+            Category = SkillCategory.YooAsset, Operation = SkillOperation.Query,
+            Tags = new[] { "yooasset", "build", "settings", "query" },
+            Outputs = new[] { "packageName", "pipeline", "compression", "fileNameStyle" },
+            ReadOnly = true,
+            RequiresPackages = new[] { "com.tuyoogame.yooasset" })]
+        public static object GetBuildSettings(string packageName, string pipeline = null)
+        {
+#if !YOO_ASSET
+            return NoYooAsset();
+#else
+            if (string.IsNullOrEmpty(packageName)) return new { error = "packageName is required." };
+            var buildPipeline = string.IsNullOrEmpty(pipeline)
+                ? AssetBundleBuilderSetting.GetPackageBuildPipeline(packageName)
+                : pipeline;
+            return new
+            {
+                packageName,
+                pipeline = buildPipeline,
+                compression = AssetBundleBuilderSetting.GetPackageCompressOption(packageName, buildPipeline).ToString(),
+                fileNameStyle = AssetBundleBuilderSetting.GetPackageFileNameStyle(packageName, buildPipeline).ToString(),
+                buildinFileCopyOption = AssetBundleBuilderSetting.GetPackageBuildinFileCopyOption(packageName, buildPipeline).ToString(),
+                buildinFileCopyParams = AssetBundleBuilderSetting.GetPackageBuildinFileCopyParams(packageName, buildPipeline),
+                encryptionServicesClassName = AssetBundleBuilderSetting.GetPackageEncyptionServicesClassName(packageName, buildPipeline),
+                manifestProcessServicesClassName = AssetBundleBuilderSetting.GetPackageManifestProcessServicesClassName(packageName, buildPipeline),
+                manifestRestoreServicesClassName = AssetBundleBuilderSetting.GetPackageManifestRestoreServicesClassName(packageName, buildPipeline),
+                clearBuildCache = AssetBundleBuilderSetting.GetPackageClearBuildCache(packageName, buildPipeline),
+                useAssetDependencyDB = AssetBundleBuilderSetting.GetPackageUseAssetDependencyDB(packageName, buildPipeline)
+            };
+#endif
+        }
+
+        [UnitySkill("yooasset_set_build_settings",
+            "Persist YooAsset AssetBundle Builder EditorPrefs for a package and pipeline.",
+            Category = SkillCategory.YooAsset, Operation = SkillOperation.Modify,
+            Tags = new[] { "yooasset", "build", "settings", "modify" },
+            Outputs = new[] { "success", "packageName", "pipeline" },
+            MutatesAssets = false, RiskLevel = "low",
+            RequiresPackages = new[] { "com.tuyoogame.yooasset" })]
+        public static object SetBuildSettings(
+            string packageName,
+            string pipeline = "ScriptableBuildPipeline",
+            string compression = "LZ4",
+            string fileNameStyle = "HashName",
+            string buildinFileCopyOption = "None",
+            string buildinFileCopyParams = "",
+            string encryptionServicesClassName = null,
+            string manifestProcessServicesClassName = null,
+            string manifestRestoreServicesClassName = null,
+            bool clearBuildCache = false,
+            bool useAssetDependencyDB = true)
+        {
+#if !YOO_ASSET
+            return NoYooAsset();
+#else
+            if (string.IsNullOrEmpty(packageName)) return new { error = "packageName is required." };
+            if (!Enum.TryParse<EBuildPipeline>(pipeline, out _))
+                return new { error = $"Unknown pipeline: {pipeline}." };
+            if (!Enum.TryParse<ECompressOption>(compression, out var eCompress))
+                return new { error = $"Unknown compression: {compression}." };
+            if (!Enum.TryParse<EFileNameStyle>(fileNameStyle, out var eFileNameStyle))
+                return new { error = $"Unknown fileNameStyle: {fileNameStyle}." };
+            if (!Enum.TryParse<EBuildinFileCopyOption>(buildinFileCopyOption, out var eCopy))
+                return new { error = $"Unknown buildinFileCopyOption: {buildinFileCopyOption}." };
+
+            AssetBundleBuilderSetting.SetPackageBuildPipeline(packageName, pipeline);
+            AssetBundleBuilderSetting.SetPackageCompressOption(packageName, pipeline, eCompress);
+            AssetBundleBuilderSetting.SetPackageFileNameStyle(packageName, pipeline, eFileNameStyle);
+            AssetBundleBuilderSetting.SetPackageBuildinFileCopyOption(packageName, pipeline, eCopy);
+            AssetBundleBuilderSetting.SetPackageBuildinFileCopyParams(packageName, pipeline, buildinFileCopyParams ?? string.Empty);
+            AssetBundleBuilderSetting.SetPackageClearBuildCache(packageName, pipeline, clearBuildCache);
+            AssetBundleBuilderSetting.SetPackageUseAssetDependencyDB(packageName, pipeline, useAssetDependencyDB);
+            if (encryptionServicesClassName != null)
+                AssetBundleBuilderSetting.SetPackageEncyptionServicesClassName(packageName, pipeline, encryptionServicesClassName);
+            if (manifestProcessServicesClassName != null)
+                AssetBundleBuilderSetting.SetPackageManifestProcessServicesClassName(packageName, pipeline, manifestProcessServicesClassName);
+            if (manifestRestoreServicesClassName != null)
+                AssetBundleBuilderSetting.SetPackageManifestRestoreServicesClassName(packageName, pipeline, manifestRestoreServicesClassName);
+            return new { success = true, packageName, pipeline };
+#endif
+        }
+
         [UnitySkill("yooasset_open_builder_window",
             "Open the YooAsset 'AssetBundle Builder' Editor window (menu: YooAsset/AssetBundle Builder).",
             Category = SkillCategory.YooAsset, Operation = SkillOperation.Execute,
@@ -287,6 +446,307 @@ namespace UnitySkills
 #else
             bool opened = EditorApplication.ExecuteMenuItem("YooAsset/AssetBundle Collector");
             return new { opened, menuPath = "YooAsset/AssetBundle Collector" };
+#endif
+        }
+
+        [UnitySkill("yooasset_open_reporter_window",
+            "Open the YooAsset AssetBundle Reporter window.",
+            Category = SkillCategory.YooAsset, Operation = SkillOperation.Execute,
+            Tags = new[] { "yooasset", "window", "reporter", "tool" },
+            Outputs = new[] { "opened" },
+            RequiresPackages = new[] { "com.tuyoogame.yooasset" })]
+        public static object OpenReporterWindow()
+        {
+#if !YOO_ASSET
+            return NoYooAsset();
+#else
+            bool opened = EditorApplication.ExecuteMenuItem("YooAsset/AssetBundle Reporter");
+            return new { opened, menuPath = "YooAsset/AssetBundle Reporter" };
+#endif
+        }
+
+        [UnitySkill("yooasset_open_debugger_window",
+            "Open the YooAsset AssetBundle Debugger window.",
+            Category = SkillCategory.YooAsset, Operation = SkillOperation.Execute,
+            Tags = new[] { "yooasset", "window", "debugger", "tool" },
+            Outputs = new[] { "opened" },
+            RequiresPackages = new[] { "com.tuyoogame.yooasset" })]
+        public static object OpenDebuggerWindow()
+        {
+#if !YOO_ASSET
+            return NoYooAsset();
+#else
+            bool opened = EditorApplication.ExecuteMenuItem("YooAsset/AssetBundle Debugger");
+            return new { opened, menuPath = "YooAsset/AssetBundle Debugger" };
+#endif
+        }
+
+        [UnitySkill("yooasset_open_assetart_scanner_window",
+            "Open the YooAsset AssetArt Scanner window.",
+            Category = SkillCategory.YooAsset, Operation = SkillOperation.Execute,
+            Tags = new[] { "yooasset", "window", "assetart", "scanner", "tool" },
+            Outputs = new[] { "opened" },
+            RequiresPackages = new[] { "com.tuyoogame.yooasset" })]
+        public static object OpenAssetArtScannerWindow()
+        {
+#if !YOO_ASSET
+            return NoYooAsset();
+#else
+            var type = Type.GetType("YooAsset.Editor.AssetArtScannerWindow, YooAsset.Editor");
+            if (type == null) return new { error = "AssetArtScannerWindow type not found." };
+            var method = type.GetMethod("OpenWindow", BindingFlags.Public | BindingFlags.Static);
+            method?.Invoke(null, null);
+            return new { opened = method != null, windowType = type.FullName };
+#endif
+        }
+
+        [UnitySkill("yooasset_list_assetart_scanners",
+            "List YooAsset AssetArtScanner configurations.",
+            Category = SkillCategory.YooAsset, Operation = SkillOperation.Query,
+            Tags = new[] { "yooasset", "assetart", "scanner", "list" },
+            Outputs = new[] { "scannerCount", "scanners" },
+            ReadOnly = true,
+            RequiresPackages = new[] { "com.tuyoogame.yooasset" })]
+        public static object ListAssetArtScanners(string keyword = null)
+        {
+#if !YOO_ASSET
+            return NoYooAsset();
+#else
+            var scanners = AssetArtScannerSettingData.Setting.Scanners
+                .Where(s => string.IsNullOrEmpty(keyword) || s.CheckKeyword(keyword))
+                .Select(s => new
+                {
+                    guid = s.ScannerGUID,
+                    name = s.ScannerName,
+                    desc = s.ScannerDesc,
+                    schema = s.ScannerSchema,
+                    saveDirectory = s.SaveDirectory,
+                    collectorCount = s.Collectors?.Count ?? 0,
+                    whiteListCount = s.WhiteList?.Count ?? 0
+                }).ToArray();
+            return new { scannerCount = scanners.Length, scanners };
+#endif
+        }
+
+        [UnitySkill("yooasset_run_assetart_scanner",
+            "Run one YooAsset AssetArtScanner and optionally save its report file.",
+            Category = SkillCategory.YooAsset, Operation = SkillOperation.Execute,
+            Tags = new[] { "yooasset", "assetart", "scanner", "run" },
+            Outputs = new[] { "success", "scannerGUID", "reportSaved" },
+            MutatesAssets = true, RiskLevel = "medium",
+            RequiresPackages = new[] { "com.tuyoogame.yooasset" })]
+        public static object RunAssetArtScanner(string scannerGUID, string saveDirectory = null)
+        {
+#if !YOO_ASSET
+            return NoYooAsset();
+#else
+            if (string.IsNullOrEmpty(scannerGUID)) return new { error = "scannerGUID is required." };
+            ScannerResult result;
+            try { result = AssetArtScannerSettingData.Scan(scannerGUID); }
+            catch (Exception ex) { return new { success = false, error = ex.Message, exceptionType = ex.GetType().Name }; }
+            bool reportSaved = false;
+            if (!string.IsNullOrEmpty(saveDirectory) && result != null && result.Report != null)
+            {
+                result.SaveReportFile(saveDirectory);
+                reportSaved = true;
+            }
+            return new
+            {
+                success = result != null && result.Succeed,
+                scannerGUID,
+                error = result?.ErrorInfo,
+                errorStack = result?.ErrorStack,
+                reportSaved,
+                saveDirectory
+            };
+#endif
+        }
+
+        [UnitySkill("yooasset_run_all_assetart_scanners",
+            "Run all YooAsset AssetArtScanners, optionally filtered by keyword.",
+            Category = SkillCategory.YooAsset, Operation = SkillOperation.Execute,
+            Tags = new[] { "yooasset", "assetart", "scanner", "run", "all" },
+            Outputs = new[] { "success", "scannerCount" },
+            MutatesAssets = true, RiskLevel = "medium",
+            RequiresPackages = new[] { "com.tuyoogame.yooasset" })]
+        public static object RunAllAssetArtScanners(string keyword = null)
+        {
+#if !YOO_ASSET
+            return NoYooAsset();
+#else
+            try
+            {
+                if (string.IsNullOrEmpty(keyword)) AssetArtScannerSettingData.ScanAll();
+                else AssetArtScannerSettingData.ScanAll(keyword);
+                return new { success = true, scannerCount = AssetArtScannerSettingData.Setting.Scanners.Count, keyword };
+            }
+            catch (Exception ex)
+            {
+                return new { success = false, error = ex.Message, exceptionType = ex.GetType().Name };
+            }
+#endif
+        }
+
+        [UnitySkill("yooasset_import_assetart_scanner_config",
+            "Import YooAsset AssetArtScanner JSON config.",
+            Category = SkillCategory.YooAsset, Operation = SkillOperation.Modify,
+            Tags = new[] { "yooasset", "assetart", "scanner", "config", "import" },
+            Outputs = new[] { "success", "configPath" },
+            MutatesAssets = true, RiskLevel = "medium",
+            RequiresPackages = new[] { "com.tuyoogame.yooasset" })]
+        public static object ImportAssetArtScannerConfig(string configPath)
+        {
+#if !YOO_ASSET
+            return NoYooAsset();
+#else
+            if (string.IsNullOrEmpty(configPath)) return new { error = "configPath is required." };
+            if (!File.Exists(configPath)) return new { error = $"Config file not found: {configPath}" };
+            try
+            {
+                AssetArtScannerConfig.ImportJsonConfig(configPath);
+                return new { success = true, configPath, scannerCount = AssetArtScannerSettingData.Setting.Scanners.Count };
+            }
+            catch (Exception ex)
+            {
+                return new { success = false, error = ex.Message, exceptionType = ex.GetType().Name };
+            }
+#endif
+        }
+
+        [UnitySkill("yooasset_export_assetart_scanner_config",
+            "Export YooAsset AssetArtScanner JSON config.",
+            Category = SkillCategory.YooAsset, Operation = SkillOperation.Execute,
+            Tags = new[] { "yooasset", "assetart", "scanner", "config", "export" },
+            Outputs = new[] { "success", "configPath" },
+            MutatesAssets = false, RiskLevel = "low",
+            RequiresPackages = new[] { "com.tuyoogame.yooasset" })]
+        public static object ExportAssetArtScannerConfig(string configPath)
+        {
+#if !YOO_ASSET
+            return NoYooAsset();
+#else
+            if (string.IsNullOrEmpty(configPath)) return new { error = "configPath is required." };
+            try
+            {
+                AssetArtScannerConfig.ExportJsonConfig(configPath);
+                return new { success = true, configPath };
+            }
+            catch (Exception ex)
+            {
+                return new { success = false, error = ex.Message, exceptionType = ex.GetType().Name };
+            }
+#endif
+        }
+
+        [UnitySkill("yooasset_runtime_validate_package",
+            "Start a PlayMode runtime validation job for YooAsset EditorSimulateMode initialization, asset load/release, downloader status, and cleanup.",
+            Category = SkillCategory.YooAsset, Operation = SkillOperation.Execute,
+            Tags = new[] { "yooasset", "runtime", "playmode", "validate", "load" },
+            Outputs = new[] { "jobId", "status", "packageName" },
+            MayEnterPlayMode = true, SupportsDryRun = false, RiskLevel = "medium",
+            RequiresPackages = new[] { "com.tuyoogame.yooasset" })]
+        public static object RuntimeValidatePackage(
+            string packageName,
+            string assetLocation = null,
+            bool restoreEditMode = true,
+            bool cleanup = true,
+            bool checkDownloader = true,
+            int downloadingMaxNumber = 4,
+            int failedTryAgain = 1)
+        {
+#if !YOO_ASSET
+            return NoYooAsset();
+#else
+            if (string.IsNullOrEmpty(packageName)) return new { error = "packageName is required." };
+            var job = new RuntimeValidationJob
+            {
+                JobId = Guid.NewGuid().ToString("N").Substring(0, 8),
+                PackageName = packageName,
+                AssetLocation = assetLocation,
+                RestoreEditMode = restoreEditMode,
+                Cleanup = cleanup,
+                CheckDownloader = checkDownloader,
+                DownloadingMaxNumber = Math.Max(1, downloadingMaxNumber),
+                FailedTryAgain = Math.Max(0, failedTryAgain),
+                Status = "queued",
+                Stage = "waiting_playmode",
+                Progress = 0
+            };
+            RuntimeValidationJobs[job.JobId] = job;
+            PersistRuntimeValidationJobs();
+            EnsureRuntimeValidationUpdateHooked();
+            return new
+            {
+                jobId = job.JobId,
+                status = job.Status,
+                stage = job.Stage,
+                packageName,
+                assetLocation,
+                restoreEditMode,
+                cleanup,
+                checkDownloader
+            };
+#endif
+        }
+
+        [UnitySkill("yooasset_runtime_get_validation_result",
+            "Get the current status/result for a YooAsset runtime validation job.",
+            Category = SkillCategory.YooAsset, Operation = SkillOperation.Query,
+            Tags = new[] { "yooasset", "runtime", "playmode", "validation", "result" },
+            Outputs = new[] { "jobId", "status", "stage", "result" },
+            ReadOnly = true,
+            RequiresPackages = new[] { "com.tuyoogame.yooasset" })]
+        public static object RuntimeGetValidationResult(string jobId)
+        {
+#if !YOO_ASSET
+            return NoYooAsset();
+#else
+            if (string.IsNullOrEmpty(jobId)) return new { error = "jobId is required." };
+            if (!RuntimeValidationJobs.TryGetValue(jobId, out var job))
+                return new { error = $"Runtime validation job '{jobId}' not found." };
+            return new
+            {
+                jobId = job.JobId,
+                packageName = job.PackageName,
+                status = job.Status,
+                stage = job.Stage,
+                progress = job.Progress,
+                lastError = job.Error,
+                result = job.Result
+            };
+#endif
+        }
+
+        [UnitySkill("yooasset_runtime_cleanup",
+            "Clean completed YooAsset runtime validation jobs and optionally force YooAssets cleanup / exit Play Mode.",
+            Category = SkillCategory.YooAsset, Operation = SkillOperation.Execute,
+            Tags = new[] { "yooasset", "runtime", "cleanup", "playmode" },
+            Outputs = new[] { "success", "removedJobs" },
+            MayEnterPlayMode = true, RiskLevel = "medium",
+            RequiresPackages = new[] { "com.tuyoogame.yooasset" })]
+        public static object RuntimeCleanup(string jobId = null, bool forceYooAssetsDestroy = false, bool exitPlayMode = false)
+        {
+#if !YOO_ASSET
+            return NoYooAsset();
+#else
+            var removed = 0;
+            if (string.IsNullOrEmpty(jobId))
+            {
+                removed = RuntimeValidationJobs.Count;
+                RuntimeValidationJobs.Clear();
+            }
+            else if (RuntimeValidationJobs.Remove(jobId))
+            {
+                removed = 1;
+            }
+            PersistRuntimeValidationJobs();
+
+            if (forceYooAssetsDestroy && Application.isPlaying && YooAssets.Initialized)
+                YooAssets.Destroy();
+            if (exitPlayMode && EditorApplication.isPlaying)
+                EditorApplication.isPlaying = false;
+
+            return new { success = true, removedJobs = removed, forceYooAssetsDestroy, exitPlayMode };
 #endif
         }
 
@@ -580,6 +1040,230 @@ namespace UnitySkills
 #endif
         }
 
+        [UnitySkill("yooasset_modify_collector_settings",
+            "Modify global AssetBundleCollectorSetting flags such as package view and unique bundle names.",
+            Category = SkillCategory.YooAsset, Operation = SkillOperation.Modify,
+            Tags = new[] { "yooasset", "collector", "settings", "modify" },
+            Outputs = new[] { "success", "showPackageView", "uniqueBundleName" },
+            MutatesAssets = true, RiskLevel = "low",
+            RequiresPackages = new[] { "com.tuyoogame.yooasset" })]
+        public static object ModifyCollectorSettings(bool showPackageView = false, bool uniqueBundleName = false, bool save = true)
+        {
+#if !YOO_ASSET
+            return NoYooAsset();
+#else
+            AssetBundleCollectorSettingData.ModifyShowPackageView(showPackageView);
+            AssetBundleCollectorSettingData.ModifyUniqueBundleName(uniqueBundleName);
+            if (save) AssetBundleCollectorSettingData.SaveFile();
+            return new { success = true, showPackageView, uniqueBundleName, saved = save };
+#endif
+        }
+
+        [UnitySkill("yooasset_modify_collector_package",
+            "Modify package-level collector options: description, addressable mode, extensionless support, GUID inclusion, shader auto-collection, and ignore rule.",
+            Category = SkillCategory.YooAsset, Operation = SkillOperation.Modify,
+            Tags = new[] { "yooasset", "collector", "package", "modify" },
+            Outputs = new[] { "success", "packageName" },
+            MutatesAssets = true, RiskLevel = "low",
+            RequiresPackages = new[] { "com.tuyoogame.yooasset" })]
+        public static object ModifyCollectorPackage(
+            string packageName,
+            string packageDesc = null,
+            string newPackageName = null,
+            bool enableAddressable = false,
+            bool supportExtensionless = true,
+            bool locationToLower = false,
+            bool includeAssetGUID = false,
+            bool autoCollectShaders = true,
+            string ignoreRule = "NormalIgnoreRule",
+            bool save = true)
+        {
+#if !YOO_ASSET
+            return NoYooAsset();
+#else
+            var pkg = FindCollectorPackage(packageName);
+            if (pkg == null) return new { error = $"Package '{packageName}' not found." };
+            if (!AssetBundleCollectorSettingData.HasIgnoreRuleName(ignoreRule))
+                return new { error = $"Unknown ignoreRule: {ignoreRule}." };
+            if (!string.IsNullOrWhiteSpace(newPackageName) && newPackageName != packageName)
+            {
+                if (AssetBundleCollectorSettingData.Setting.Packages.Any(p => p.PackageName == newPackageName))
+                    return new { error = $"Package '{newPackageName}' already exists." };
+                pkg.PackageName = newPackageName;
+            }
+            if (packageDesc != null) pkg.PackageDesc = packageDesc;
+            pkg.EnableAddressable = enableAddressable;
+            pkg.SupportExtensionless = supportExtensionless;
+            pkg.LocationToLower = locationToLower;
+            pkg.IncludeAssetGUID = includeAssetGUID;
+            pkg.AutoCollectShaders = autoCollectShaders;
+            pkg.IgnoreRuleName = ignoreRule;
+            AssetBundleCollectorSettingData.ModifyPackage(pkg);
+            if (save) AssetBundleCollectorSettingData.SaveFile();
+            return new
+            {
+                success = true,
+                packageName = pkg.PackageName,
+                packageDesc = pkg.PackageDesc,
+                enableAddressable,
+                supportExtensionless,
+                locationToLower,
+                includeAssetGUID,
+                autoCollectShaders,
+                ignoreRule,
+                saved = save
+            };
+#endif
+        }
+
+        [UnitySkill("yooasset_remove_collector_package",
+            "Remove a collector package by name.",
+            Category = SkillCategory.YooAsset, Operation = SkillOperation.Delete,
+            Tags = new[] { "yooasset", "collector", "package", "remove", "delete" },
+            Outputs = new[] { "success", "packageName" },
+            MutatesAssets = true, RiskLevel = "medium",
+            RequiresPackages = new[] { "com.tuyoogame.yooasset" })]
+        public static object RemoveCollectorPackage(string packageName, bool save = true)
+        {
+#if !YOO_ASSET
+            return NoYooAsset();
+#else
+            var pkg = FindCollectorPackage(packageName);
+            if (pkg == null) return new { error = $"Package '{packageName}' not found." };
+            AssetBundleCollectorSettingData.RemovePackage(pkg);
+            if (save) AssetBundleCollectorSettingData.SaveFile();
+            return new { success = true, packageName, saved = save };
+#endif
+        }
+
+        [UnitySkill("yooasset_modify_collector_group",
+            "Modify a collector group name, description, active rule, or tags.",
+            Category = SkillCategory.YooAsset, Operation = SkillOperation.Modify,
+            Tags = new[] { "yooasset", "collector", "group", "modify" },
+            Outputs = new[] { "success", "packageName", "groupName" },
+            MutatesAssets = true, RiskLevel = "low",
+            RequiresPackages = new[] { "com.tuyoogame.yooasset" })]
+        public static object ModifyCollectorGroup(
+            string packageName,
+            string groupName,
+            string newGroupName = null,
+            string groupDesc = null,
+            string activeRule = "EnableGroup",
+            string assetTags = null,
+            bool save = true)
+        {
+#if !YOO_ASSET
+            return NoYooAsset();
+#else
+            var pkg = FindCollectorPackage(packageName);
+            if (pkg == null) return new { error = $"Package '{packageName}' not found." };
+            var group = FindCollectorGroup(pkg, groupName);
+            if (group == null) return new { error = $"Group '{groupName}' not found in package '{packageName}'." };
+            if (!AssetBundleCollectorSettingData.HasActiveRuleName(activeRule))
+                return new { error = $"Unknown activeRule: {activeRule}." };
+            if (!string.IsNullOrWhiteSpace(newGroupName) && newGroupName != groupName)
+            {
+                if (pkg.Groups.Any(g => g.GroupName == newGroupName))
+                    return new { error = $"Group '{newGroupName}' already exists in package '{packageName}'." };
+                group.GroupName = newGroupName;
+            }
+            if (groupDesc != null) group.GroupDesc = groupDesc;
+            if (assetTags != null) group.AssetTags = assetTags;
+            group.ActiveRuleName = activeRule;
+            AssetBundleCollectorSettingData.ModifyGroup(pkg, group);
+            if (save) AssetBundleCollectorSettingData.SaveFile();
+            return new { success = true, packageName, groupName = group.GroupName, activeRule, assetTags = group.AssetTags, saved = save };
+#endif
+        }
+
+        [UnitySkill("yooasset_remove_collector_group",
+            "Remove a collector group from a package.",
+            Category = SkillCategory.YooAsset, Operation = SkillOperation.Delete,
+            Tags = new[] { "yooasset", "collector", "group", "remove", "delete" },
+            Outputs = new[] { "success", "packageName", "groupName" },
+            MutatesAssets = true, RiskLevel = "medium",
+            RequiresPackages = new[] { "com.tuyoogame.yooasset" })]
+        public static object RemoveCollectorGroup(string packageName, string groupName, bool save = true)
+        {
+#if !YOO_ASSET
+            return NoYooAsset();
+#else
+            var pkg = FindCollectorPackage(packageName);
+            if (pkg == null) return new { error = $"Package '{packageName}' not found." };
+            var group = FindCollectorGroup(pkg, groupName);
+            if (group == null) return new { error = $"Group '{groupName}' not found in package '{packageName}'." };
+            AssetBundleCollectorSettingData.RemoveGroup(pkg, group);
+            if (save) AssetBundleCollectorSettingData.SaveFile();
+            return new { success = true, packageName, groupName, saved = save };
+#endif
+        }
+
+        [UnitySkill("yooasset_modify_collector",
+            "Modify an existing AssetBundleCollector matched by collectPath.",
+            Category = SkillCategory.YooAsset, Operation = SkillOperation.Modify,
+            Tags = new[] { "yooasset", "collector", "modify" },
+            Outputs = new[] { "success", "packageName", "groupName", "collectPath" },
+            MutatesAssets = true, RiskLevel = "low",
+            RequiresPackages = new[] { "com.tuyoogame.yooasset" })]
+        public static object ModifyCollector(
+            string packageName,
+            string groupName,
+            string collectPath,
+            string newCollectPath = null,
+            string collectorType = "MainAssetCollector",
+            string addressRule = "AddressByFileName",
+            string packRule = "PackDirectory",
+            string filterRule = "CollectAll",
+            string assetTags = null,
+            string userData = null,
+            bool save = true)
+        {
+#if !YOO_ASSET
+            return NoYooAsset();
+#else
+            var groupResult = ResolveCollectorGroup(packageName, groupName, out var pkg, out var group);
+            if (groupResult != null) return groupResult;
+            var collector = FindCollector(group, collectPath);
+            if (collector == null) return new { error = $"Collector '{collectPath}' not found in group '{groupName}'." };
+            var targetPath = string.IsNullOrWhiteSpace(newCollectPath) ? collectPath : newCollectPath;
+            var validationError = ValidateCollectorArguments(targetPath, collectorType, addressRule, packRule, filterRule, out var eType);
+            if (validationError != null) return validationError;
+            collector.CollectPath = targetPath;
+            collector.CollectorGUID = AssetDatabase.AssetPathToGUID(targetPath);
+            collector.CollectorType = eType;
+            collector.AddressRuleName = addressRule;
+            collector.PackRuleName = packRule;
+            collector.FilterRuleName = filterRule;
+            if (assetTags != null) collector.AssetTags = assetTags;
+            if (userData != null) collector.UserData = userData;
+            AssetBundleCollectorSettingData.ModifyCollector(group, collector);
+            if (save) AssetBundleCollectorSettingData.SaveFile();
+            return new { success = true, packageName = pkg.PackageName, groupName = group.GroupName, collectPath = collector.CollectPath, saved = save };
+#endif
+        }
+
+        [UnitySkill("yooasset_remove_collector",
+            "Remove an AssetBundleCollector matched by collectPath.",
+            Category = SkillCategory.YooAsset, Operation = SkillOperation.Delete,
+            Tags = new[] { "yooasset", "collector", "remove", "delete" },
+            Outputs = new[] { "success", "packageName", "groupName", "collectPath" },
+            MutatesAssets = true, RiskLevel = "medium",
+            RequiresPackages = new[] { "com.tuyoogame.yooasset" })]
+        public static object RemoveCollector(string packageName, string groupName, string collectPath, bool save = true)
+        {
+#if !YOO_ASSET
+            return NoYooAsset();
+#else
+            var groupResult = ResolveCollectorGroup(packageName, groupName, out var pkg, out var group);
+            if (groupResult != null) return groupResult;
+            var collector = FindCollector(group, collectPath);
+            if (collector == null) return new { error = $"Collector '{collectPath}' not found in group '{groupName}'." };
+            AssetBundleCollectorSettingData.RemoveCollector(group, collector);
+            if (save) AssetBundleCollectorSettingData.SaveFile();
+            return new { success = true, packageName = pkg.PackageName, groupName = group.GroupName, collectPath, saved = save };
+#endif
+        }
+
         // ==================================================================================
         // D. Build report analysis (4 skills)
         // ==================================================================================
@@ -762,6 +1446,206 @@ namespace UnitySkills
 #endif
         }
 
+        [UnitySkill("yooasset_list_report_assets",
+            "List assets from a YooAsset BuildReport with paging and filters.",
+            Category = SkillCategory.YooAsset, Operation = SkillOperation.Analyze,
+            Tags = new[] { "yooasset", "report", "asset", "list", "analyze" },
+            Outputs = new[] { "total", "returned", "items" },
+            ReadOnly = true,
+            RequiresPackages = new[] { "com.tuyoogame.yooasset" })]
+        public static object ListReportAssets(
+            string reportPath,
+            string filterBundle = null,
+            string filterTag = null,
+            string search = null,
+            string sortBy = "path",
+            int limit = 100,
+            int offset = 0)
+        {
+#if !YOO_ASSET
+            return NoYooAsset();
+#else
+            var reportError = TryLoadReport(reportPath, out var report);
+            if (reportError != null) return reportError;
+            IEnumerable<ReportAssetInfo> assets = report.AssetInfos ?? new List<ReportAssetInfo>();
+            if (!string.IsNullOrEmpty(filterBundle))
+                assets = assets.Where(a => a.MainBundleName == filterBundle);
+            if (!string.IsNullOrEmpty(filterTag))
+                assets = assets.Where(a => a.AssetTags != null && a.AssetTags.Contains(filterTag));
+            if (!string.IsNullOrEmpty(search))
+                assets = assets.Where(a =>
+                    (a.AssetPath != null && a.AssetPath.IndexOf(search, StringComparison.OrdinalIgnoreCase) >= 0) ||
+                    (a.Address != null && a.Address.IndexOf(search, StringComparison.OrdinalIgnoreCase) >= 0));
+            switch ((sortBy ?? "path").ToLowerInvariant())
+            {
+                case "size": assets = assets.OrderByDescending(a => a.MainBundleSize); break;
+                case "bundle": assets = assets.OrderBy(a => a.MainBundleName); break;
+                case "dependcount": assets = assets.OrderByDescending(a => a.DependAssets?.Count ?? 0); break;
+                default: assets = assets.OrderBy(a => a.AssetPath); break;
+            }
+            var materialized = assets.ToArray();
+            var page = materialized.Skip(Math.Max(0, offset)).Take(Math.Max(1, limit)).ToArray();
+            return new
+            {
+                reportPath,
+                total = materialized.Length,
+                returned = page.Length,
+                offset,
+                limit,
+                items = page.Select(a => new
+                {
+                    address = a.Address,
+                    assetPath = a.AssetPath,
+                    assetGUID = a.AssetGUID,
+                    assetTags = a.AssetTags,
+                    mainBundleName = a.MainBundleName,
+                    mainBundleSize = a.MainBundleSize,
+                    dependAssetCount = a.DependAssets?.Count ?? 0,
+                    dependBundleCount = a.DependBundles?.Count ?? 0
+                }).ToArray()
+            };
+#endif
+        }
+
+        [UnitySkill("yooasset_get_asset_detail",
+            "Return full ReportAssetInfo for an asset path or address from a YooAsset BuildReport.",
+            Category = SkillCategory.YooAsset, Operation = SkillOperation.Analyze,
+            Tags = new[] { "yooasset", "report", "asset", "detail", "dependency" },
+            Outputs = new[] { "assetPath", "mainBundleName", "dependAssets", "dependBundles" },
+            ReadOnly = true,
+            RequiresPackages = new[] { "com.tuyoogame.yooasset" })]
+        public static object GetAssetDetail(string reportPath, string assetPath = null, string address = null)
+        {
+#if !YOO_ASSET
+            return NoYooAsset();
+#else
+            var reportError = TryLoadReport(reportPath, out var report);
+            if (reportError != null) return reportError;
+            var asset = (report.AssetInfos ?? new List<ReportAssetInfo>()).FirstOrDefault(a =>
+                (!string.IsNullOrEmpty(assetPath) && a.AssetPath == assetPath) ||
+                (!string.IsNullOrEmpty(address) && a.Address == address));
+            if (asset == null) return new { error = "Asset not found. Provide assetPath or address from yooasset_list_report_assets." };
+            return new
+            {
+                address = asset.Address,
+                assetPath = asset.AssetPath,
+                assetGUID = asset.AssetGUID,
+                assetTags = asset.AssetTags,
+                mainBundleName = asset.MainBundleName,
+                mainBundleSize = asset.MainBundleSize,
+                dependBundles = asset.DependBundles,
+                dependAssets = asset.DependAssets?.Select(a => new
+                {
+                    assetPath = a.AssetPath,
+                    assetGUID = a.AssetGUID,
+                    fileExtension = a.FileExtension
+                }).ToArray()
+            };
+#endif
+        }
+
+        [UnitySkill("yooasset_get_dependency_graph",
+            "Build a compact dependency graph from a YooAsset BuildReport for bundle and asset analysis.",
+            Category = SkillCategory.YooAsset, Operation = SkillOperation.Analyze,
+            Tags = new[] { "yooasset", "report", "graph", "dependency", "analyze" },
+            Outputs = new[] { "nodes", "edges" },
+            ReadOnly = true,
+            RequiresPackages = new[] { "com.tuyoogame.yooasset" })]
+        public static object GetDependencyGraph(string reportPath, string rootBundle = null, string rootAssetPath = null, int maxNodes = 200)
+        {
+#if !YOO_ASSET
+            return NoYooAsset();
+#else
+            var reportError = TryLoadReport(reportPath, out var report);
+            if (reportError != null) return reportError;
+            var nodes = new Dictionary<string, object>(StringComparer.Ordinal);
+            var edges = new List<object>();
+            void AddNode(string id, string kind, string label)
+            {
+                if (nodes.Count >= Math.Max(1, maxNodes) || nodes.ContainsKey(id)) return;
+                nodes[id] = new { id, kind, label };
+            }
+            foreach (var bundle in report.BundleInfos ?? new List<ReportBundleInfo>())
+            {
+                if (!string.IsNullOrEmpty(rootBundle) && bundle.BundleName != rootBundle &&
+                    !(bundle.DependBundles?.Contains(rootBundle) ?? false) &&
+                    !(bundle.ReferenceBundles?.Contains(rootBundle) ?? false))
+                    continue;
+                AddNode($"bundle:{bundle.BundleName}", "bundle", bundle.BundleName);
+                foreach (var dep in bundle.DependBundles ?? new List<string>())
+                {
+                    AddNode($"bundle:{dep}", "bundle", dep);
+                    edges.Add(new { from = $"bundle:{bundle.BundleName}", to = $"bundle:{dep}", relation = "dependsOnBundle" });
+                }
+                foreach (var asset in bundle.BundleContents ?? new List<YooAsset.Editor.AssetInfo>())
+                {
+                    if (!string.IsNullOrEmpty(rootAssetPath) && asset.AssetPath != rootAssetPath) continue;
+                    AddNode($"asset:{asset.AssetPath}", "asset", asset.AssetPath);
+                    edges.Add(new { from = $"bundle:{bundle.BundleName}", to = $"asset:{asset.AssetPath}", relation = "containsAsset" });
+                }
+            }
+            foreach (var asset in report.AssetInfos ?? new List<ReportAssetInfo>())
+            {
+                if (!string.IsNullOrEmpty(rootAssetPath) && asset.AssetPath != rootAssetPath) continue;
+                AddNode($"asset:{asset.AssetPath}", "asset", asset.AssetPath);
+                AddNode($"bundle:{asset.MainBundleName}", "bundle", asset.MainBundleName);
+                edges.Add(new { from = $"asset:{asset.AssetPath}", to = $"bundle:{asset.MainBundleName}", relation = "mainBundle" });
+                foreach (var dep in asset.DependAssets ?? new List<YooAsset.Editor.AssetInfo>())
+                {
+                    AddNode($"asset:{dep.AssetPath}", "asset", dep.AssetPath);
+                    edges.Add(new { from = $"asset:{asset.AssetPath}", to = $"asset:{dep.AssetPath}", relation = "dependsOnAsset" });
+                }
+            }
+            return new { reportPath, nodeCount = nodes.Count, edgeCount = edges.Count, nodes = nodes.Values.ToArray(), edges = edges.ToArray() };
+#endif
+        }
+
+        [UnitySkill("yooasset_compare_build_reports",
+            "Compare two YooAsset BuildReport files and summarize bundle/asset additions, removals, and size changes.",
+            Category = SkillCategory.YooAsset, Operation = SkillOperation.Analyze,
+            Tags = new[] { "yooasset", "report", "compare", "diff", "analyze" },
+            Outputs = new[] { "bundleDiff", "assetDiff" },
+            ReadOnly = true,
+            RequiresPackages = new[] { "com.tuyoogame.yooasset" })]
+        public static object CompareBuildReports(string oldReportPath, string newReportPath, int limit = 100)
+        {
+#if !YOO_ASSET
+            return NoYooAsset();
+#else
+            var oldError = TryLoadReport(oldReportPath, out var oldReport);
+            if (oldError != null) return oldError;
+            var newError = TryLoadReport(newReportPath, out var newReport);
+            if (newError != null) return newError;
+            var oldBundles = (oldReport.BundleInfos ?? new List<ReportBundleInfo>()).ToDictionary(b => b.BundleName, b => b, StringComparer.Ordinal);
+            var newBundles = (newReport.BundleInfos ?? new List<ReportBundleInfo>()).ToDictionary(b => b.BundleName, b => b, StringComparer.Ordinal);
+            var oldAssets = new HashSet<string>((oldReport.AssetInfos ?? new List<ReportAssetInfo>()).Select(a => a.AssetPath), StringComparer.Ordinal);
+            var newAssets = new HashSet<string>((newReport.AssetInfos ?? new List<ReportAssetInfo>()).Select(a => a.AssetPath), StringComparer.Ordinal);
+            var changedBundles = newBundles.Keys.Intersect(oldBundles.Keys)
+                .Select(name => new { name, oldSize = oldBundles[name].FileSize, newSize = newBundles[name].FileSize, delta = newBundles[name].FileSize - oldBundles[name].FileSize })
+                .Where(x => x.delta != 0)
+                .OrderByDescending(x => Math.Abs(x.delta))
+                .Take(Math.Max(1, limit))
+                .ToArray();
+            return new
+            {
+                oldReportPath,
+                newReportPath,
+                bundleDiff = new
+                {
+                    added = newBundles.Keys.Except(oldBundles.Keys).Take(limit).ToArray(),
+                    removed = oldBundles.Keys.Except(newBundles.Keys).Take(limit).ToArray(),
+                    changed = changedBundles
+                },
+                assetDiff = new
+                {
+                    added = newAssets.Except(oldAssets).Take(limit).ToArray(),
+                    removed = oldAssets.Except(newAssets).Take(limit).ToArray()
+                },
+                totalSizeDelta = (newReport.Summary?.AllBundleTotalSize ?? 0) - (oldReport.Summary?.AllBundleTotalSize ?? 0)
+            };
+#endif
+        }
+
         [UnitySkill("yooasset_list_independ_assets",
             "List IndependAssets from a BuildReport — assets not referenced by any other asset, candidates for cleanup.",
             Category = SkillCategory.YooAsset, Operation = SkillOperation.Analyze,
@@ -801,5 +1685,420 @@ namespace UnitySkills
             };
 #endif
         }
+
+#if YOO_ASSET
+        [InitializeOnLoadMethod]
+        private static void RestoreRuntimeValidationJobsAfterReload()
+        {
+            RestoreRuntimeValidationJobs();
+        }
+
+        private static void PersistRuntimeValidationJobs()
+        {
+            if (RuntimeValidationJobs.Count == 0)
+            {
+                EditorPrefs.DeleteKey(RuntimeValidationJobsPrefKey);
+                return;
+            }
+
+            var states = RuntimeValidationJobs.Values.Select(job => new RuntimeValidationJobState
+            {
+                JobId = job.JobId,
+                PackageName = job.PackageName,
+                AssetLocation = job.AssetLocation,
+                RestoreEditMode = job.RestoreEditMode,
+                StartedPlayMode = job.StartedPlayMode,
+                Cleanup = job.Cleanup,
+                CheckDownloader = job.CheckDownloader,
+                DownloadingMaxNumber = job.DownloadingMaxNumber,
+                FailedTryAgain = job.FailedTryAgain,
+                Status = job.Status,
+                Stage = job.Stage,
+                Progress = job.Progress,
+                Error = job.Error,
+                Result = job.Result
+            }).ToArray();
+            EditorPrefs.SetString(RuntimeValidationJobsPrefKey, JsonConvert.SerializeObject(states));
+        }
+
+        private static void RestoreRuntimeValidationJobs()
+        {
+            if (!EditorPrefs.HasKey(RuntimeValidationJobsPrefKey) || RuntimeValidationJobs.Count > 0)
+                return;
+
+            RuntimeValidationJobState[] states;
+            try
+            {
+                states = JsonConvert.DeserializeObject<RuntimeValidationJobState[]>(
+                    EditorPrefs.GetString(RuntimeValidationJobsPrefKey));
+            }
+            catch
+            {
+                EditorPrefs.DeleteKey(RuntimeValidationJobsPrefKey);
+                return;
+            }
+
+            if (states == null || states.Length == 0)
+                return;
+
+            foreach (var state in states)
+            {
+                if (string.IsNullOrEmpty(state.JobId) || string.IsNullOrEmpty(state.PackageName))
+                    continue;
+
+                RuntimeValidationJobs[state.JobId] = new RuntimeValidationJob
+                {
+                    JobId = state.JobId,
+                    PackageName = state.PackageName,
+                    AssetLocation = state.AssetLocation,
+                    RestoreEditMode = state.RestoreEditMode,
+                    StartedPlayMode = state.StartedPlayMode,
+                    Cleanup = state.Cleanup,
+                    CheckDownloader = state.CheckDownloader,
+                    DownloadingMaxNumber = Math.Max(1, state.DownloadingMaxNumber),
+                    FailedTryAgain = Math.Max(0, state.FailedTryAgain),
+                    Status = string.IsNullOrEmpty(state.Status) ? "queued" : state.Status,
+                    Stage = string.IsNullOrEmpty(state.Stage) ? "waiting_playmode" : state.Stage,
+                    Progress = state.Progress,
+                    Error = state.Error,
+                    Result = state.Result ?? new Dictionary<string, object>()
+                };
+            }
+
+            if (RuntimeValidationJobs.Values.Any(job => job.Status != "completed" && job.Status != "failed"))
+                EnsureRuntimeValidationUpdateHooked();
+        }
+
+        private static AssetBundleCollectorPackage FindCollectorPackage(string packageName)
+        {
+            return AssetBundleCollectorSettingData.Setting.Packages
+                .FirstOrDefault(p => p.PackageName == packageName);
+        }
+
+        private static AssetBundleCollectorGroup FindCollectorGroup(AssetBundleCollectorPackage package, string groupName)
+        {
+            return package?.Groups.FirstOrDefault(g => g.GroupName == groupName);
+        }
+
+        private static AssetBundleCollector FindCollector(AssetBundleCollectorGroup group, string collectPath)
+        {
+            return group?.Collectors.FirstOrDefault(c => c.CollectPath == collectPath);
+        }
+
+        private static object ResolveCollectorGroup(
+            string packageName,
+            string groupName,
+            out AssetBundleCollectorPackage package,
+            out AssetBundleCollectorGroup group)
+        {
+            package = FindCollectorPackage(packageName);
+            group = null;
+            if (package == null) return new { error = $"Package '{packageName}' not found." };
+            group = FindCollectorGroup(package, groupName);
+            if (group == null) return new { error = $"Group '{groupName}' not found in package '{packageName}'." };
+            return null;
+        }
+
+        private static object ValidateCollectorArguments(
+            string collectPath,
+            string collectorType,
+            string addressRule,
+            string packRule,
+            string filterRule,
+            out ECollectorType eType)
+        {
+            eType = ECollectorType.None;
+            if (string.IsNullOrEmpty(collectPath)) return new { error = "collectPath is required." };
+            if (AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(collectPath) == null)
+                return new { error = $"collectPath '{collectPath}' does not resolve to a valid asset." };
+            if (!Enum.TryParse<ECollectorType>(collectorType, out eType))
+                return new { error = $"Unknown collectorType: {collectorType}. Available: MainAssetCollector, StaticAssetCollector, DependAssetCollector." };
+            if (!AssetBundleCollectorSettingData.HasAddressRuleName(addressRule))
+                return new { error = $"Unknown addressRule: {addressRule}." };
+            if (!AssetBundleCollectorSettingData.HasPackRuleName(packRule))
+                return new { error = $"Unknown packRule: {packRule}." };
+            if (!AssetBundleCollectorSettingData.HasFilterRuleName(filterRule))
+                return new { error = $"Unknown filterRule: {filterRule}." };
+            return null;
+        }
+
+        private static object TryLoadReport(string reportPath, out BuildReport report)
+        {
+            report = null;
+            if (string.IsNullOrEmpty(reportPath)) return new { error = "reportPath is required." };
+            if (!File.Exists(reportPath)) return new { error = $"Report file not found: {reportPath}" };
+            try
+            {
+                report = BuildReport.Deserialize(File.ReadAllText(reportPath));
+                return null;
+            }
+            catch (Exception ex)
+            {
+                return new { error = $"Failed to deserialize report: {ex.Message}" };
+            }
+        }
+
+        private static void EnsureRuntimeValidationUpdateHooked()
+        {
+            if (_runtimeValidationUpdateHooked) return;
+            EditorApplication.update += ProcessRuntimeValidationJobs;
+            _runtimeValidationUpdateHooked = true;
+        }
+
+        private static void ProcessRuntimeValidationJobs()
+        {
+            foreach (var job in RuntimeValidationJobs.Values.ToArray())
+            {
+                if (job.Status == "completed" || job.Status == "failed")
+                    continue;
+
+                try
+                {
+                    ProcessRuntimeValidationJob(job);
+                }
+                catch (Exception ex)
+                {
+                    FailRuntimeValidationJob(job, ex.Message, ex.GetType().Name);
+                }
+            }
+
+            if (RuntimeValidationJobs.Values.All(j => j.Status == "completed" || j.Status == "failed"))
+            {
+                EditorApplication.update -= ProcessRuntimeValidationJobs;
+                _runtimeValidationUpdateHooked = false;
+            }
+        }
+
+        private static void ProcessRuntimeValidationJob(RuntimeValidationJob job)
+        {
+            if (job.Stage == "waiting_playmode")
+            {
+                job.Status = "running";
+                job.Progress = 5;
+                if (!EditorApplication.isPlaying)
+                {
+                    job.StartedPlayMode = true;
+                    job.Status = "running";
+                    PersistRuntimeValidationJobs();
+                    if (!EditorApplication.isPlayingOrWillChangePlaymode)
+                        EditorApplication.isPlaying = true;
+                    return;
+                }
+                job.Stage = "initialize_yooassets";
+            }
+
+            if (!EditorApplication.isPlaying)
+                return;
+
+            if (job.Stage == "initialize_yooassets")
+            {
+                job.Progress = 15;
+                if (!YooAssets.Initialized)
+                    YooAssets.Initialize();
+
+                var simulateResult = EditorSimulateModeHelper.SimulateBuild(job.PackageName);
+                var package = YooAssets.ContainsPackage(job.PackageName)
+                    ? YooAssets.GetPackage(job.PackageName)
+                    : YooAssets.CreatePackage(job.PackageName);
+                YooAssets.SetDefaultPackage(package);
+                var parameters = new EditorSimulateModeParameters
+                {
+                    AutoUnloadBundleWhenUnused = true,
+                    EditorFileSystemParameters = FileSystemParameters.CreateDefaultEditorFileSystemParameters(simulateResult.PackageRootDirectory)
+                };
+                job.Package = package;
+                job.Result["packageRootDirectory"] = simulateResult.PackageRootDirectory;
+                job.InitializeOperation = package.InitializeAsync(parameters);
+                job.Stage = "wait_initialize";
+                return;
+            }
+
+            if (job.Stage == "wait_initialize")
+            {
+                job.Progress = 35;
+                if (!job.InitializeOperation.IsDone) return;
+                if (job.InitializeOperation.Status != EOperationStatus.Succeed)
+                {
+                    FailRuntimeValidationJob(job, job.InitializeOperation.Error, "InitializationFailed");
+                    return;
+                }
+                job.Result["initialized"] = true;
+                job.RequestVersionOperation = job.Package.RequestPackageVersionAsync();
+                job.Stage = "wait_package_version";
+                return;
+            }
+
+            if (job.Stage == "wait_package_version")
+            {
+                job.Progress = 45;
+                if (!job.RequestVersionOperation.IsDone) return;
+                if (job.RequestVersionOperation.Status != EOperationStatus.Succeed)
+                {
+                    FailRuntimeValidationJob(job, job.RequestVersionOperation.Error, "RequestPackageVersionFailed");
+                    return;
+                }
+
+                job.Result["packageVersion"] = job.RequestVersionOperation.PackageVersion;
+                job.UpdateManifestOperation = job.Package.UpdatePackageManifestAsync(job.RequestVersionOperation.PackageVersion);
+                job.Stage = "wait_manifest";
+                return;
+            }
+
+            if (job.Stage == "wait_manifest")
+            {
+                job.Progress = 50;
+                if (!job.UpdateManifestOperation.IsDone) return;
+                if (job.UpdateManifestOperation.Status != EOperationStatus.Succeed)
+                {
+                    FailRuntimeValidationJob(job, job.UpdateManifestOperation.Error, "UpdateManifestFailed");
+                    return;
+                }
+
+                job.Result["manifestUpdated"] = true;
+                job.Result["packageValid"] = job.Package.PackageValid;
+                job.Stage = "load_asset";
+                return;
+            }
+
+            if (job.Stage == "load_asset")
+            {
+                job.Progress = 55;
+                var location = job.AssetLocation;
+                if (string.IsNullOrEmpty(location))
+                {
+                    var first = job.Package.GetAllAssetInfos().FirstOrDefault(a => a != null && !a.IsInvalid);
+                    location = first?.Address;
+                    if (string.IsNullOrEmpty(location)) location = first?.AssetPath;
+                }
+
+                if (string.IsNullOrEmpty(location))
+                {
+                    job.Result["assetLoadSkipped"] = true;
+                    job.Stage = "check_downloader";
+                    return;
+                }
+
+                job.Result["assetLocation"] = location;
+                job.Result["locationValid"] = job.Package.CheckLocationValid(location);
+                if (!(bool)job.Result["locationValid"])
+                {
+                    FailRuntimeValidationJob(job, $"Location is invalid: {location}", "InvalidLocation");
+                    return;
+                }
+
+                job.AssetHandle = job.Package.LoadAssetAsync(location);
+                job.Stage = "wait_asset";
+                return;
+            }
+
+            if (job.Stage == "wait_asset")
+            {
+                if (!job.AssetHandle.IsDone) return;
+                if (job.AssetHandle.Status != EOperationStatus.Succeed)
+                {
+                    FailRuntimeValidationJob(job, job.AssetHandle.LastError, "AssetLoadFailed");
+                    return;
+                }
+                job.Result["assetLoaded"] = job.AssetHandle.AssetObject != null;
+                job.Result["assetName"] = job.AssetHandle.AssetObject ? job.AssetHandle.AssetObject.name : null;
+                job.Result["assetType"] = job.AssetHandle.AssetObject ? job.AssetHandle.AssetObject.GetType().Name : null;
+                job.AssetHandle.Release();
+                job.Result["assetHandleReleased"] = true;
+                job.Stage = "check_downloader";
+                return;
+            }
+
+            if (job.Stage == "check_downloader")
+            {
+                job.Progress = 70;
+                if (!job.CheckDownloader)
+                {
+                    job.Result["downloadSkipped"] = true;
+                    job.Stage = "cleanup";
+                    return;
+                }
+                job.Downloader = job.Package.CreateResourceDownloader(job.DownloadingMaxNumber, job.FailedTryAgain);
+                job.Result["downloadTotalCount"] = job.Downloader.TotalDownloadCount;
+                job.Result["downloadTotalBytes"] = job.Downloader.TotalDownloadBytes;
+                job.Downloader.BeginDownload();
+                job.Stage = "wait_downloader";
+                return;
+            }
+
+            if (job.Stage == "wait_downloader")
+            {
+                if (!job.Downloader.IsDone) return;
+                job.Result["downloadStatus"] = job.Downloader.Status.ToString();
+                job.Result["downloadError"] = job.Downloader.Error;
+                if (job.Downloader.Status != EOperationStatus.Succeed)
+                {
+                    FailRuntimeValidationJob(job, job.Downloader.Error, "DownloaderFailed");
+                    return;
+                }
+                job.Stage = "cleanup";
+                return;
+            }
+
+            if (job.Stage == "cleanup")
+            {
+                job.Progress = 85;
+                if (!job.Cleanup)
+                {
+                    CompleteRuntimeValidationJob(job);
+                    return;
+                }
+                job.DestroyOperation = job.Package.DestroyAsync();
+                job.Stage = "wait_destroy";
+                return;
+            }
+
+            if (job.Stage == "wait_destroy")
+            {
+                if (!job.DestroyOperation.IsDone) return;
+                job.Result["destroyStatus"] = job.DestroyOperation.Status.ToString();
+                YooAssets.RemovePackage(job.Package);
+                YooAssets.Destroy();
+                CompleteRuntimeValidationJob(job);
+            }
+        }
+
+        private static void CompleteRuntimeValidationJob(RuntimeValidationJob job)
+        {
+            job.Progress = 100;
+            job.Stage = "completed";
+            job.Status = "completed";
+            job.Result["completedAt"] = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+            PersistRuntimeValidationJobs();
+            if (job.RestoreEditMode && job.StartedPlayMode && EditorApplication.isPlaying)
+                EditorApplication.isPlaying = false;
+        }
+
+        private static void FailRuntimeValidationJob(RuntimeValidationJob job, string error, string errorType)
+        {
+            job.Status = "failed";
+            job.Stage = "failed";
+            job.Error = error;
+            job.Result["errorType"] = errorType;
+            job.Result["failedAt"] = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+            try
+            {
+                job.AssetHandle?.Release();
+                if (job.Package != null && job.Package.InitializeStatus != EOperationStatus.None)
+                    job.Package.DestroyAsync();
+                if (YooAssets.Initialized)
+                    YooAssets.Destroy();
+            }
+            catch { /* best-effort cleanup */ }
+            PersistRuntimeValidationJobs();
+            if (job.RestoreEditMode && job.StartedPlayMode && EditorApplication.isPlaying)
+                EditorApplication.isPlaying = false;
+        }
+
+        private static object SafeCall(Func<object> func)
+        {
+            try { return func(); }
+            catch (Exception ex) { return $"ERROR: {ex.Message}"; }
+        }
+#endif
     }
 }
