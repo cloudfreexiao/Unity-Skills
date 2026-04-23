@@ -33,7 +33,8 @@ namespace UnitySkills.Tests.Core
             "scriptdesign",
             "testability",
             "bookmark",
-            "history"
+            "history",
+            "shadergraph-design"
         };
 
         private static readonly HashSet<string> ExactSignatureOptionalModules = new HashSet<string>(StringComparer.OrdinalIgnoreCase)

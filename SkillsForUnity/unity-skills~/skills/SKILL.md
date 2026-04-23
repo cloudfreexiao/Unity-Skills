@@ -1,6 +1,6 @@
 ---
 name: unity-skills-index
-description: "Index of all Unity Skills modules — 44 functional modules (SA/FA) + 15 advisory modules. Browse available skills, check mode requirements, and find the right module. Triggers: module list, skill index, browse skills, find module, 模块列表, 技能索引, 查找模块."
+description: "Index of Unity Skills functional modules and advisory modules. Browse available skills, check mode requirements, and find the right module. Triggers: module list, skill index, browse skills, find module, 模块列表, 技能索引, 查找模块."
 ---
 
 # Unity Skills - Module Index
@@ -30,6 +30,7 @@ Module docs. Start with [../SKILL.md](../SKILL.md) for mode switching and schema
 | [editor](./editor/SKILL.md) | SA | Play/select/undo/redo | No |
 | [animator](./animator/SKILL.md) | FA | Animator controllers | No |
 | [shader](./shader/SKILL.md) | FA | Shader create/list | No |
+| [shadergraph](./shadergraph/SKILL.md) | FA | Shader Graph create/inspect/blackboard edit/constrained node editing | No |
 | [graphics](./graphics/SKILL.md) | FA | GraphicsSettings / QualitySettings / SRP assets | No |
 | [volume](./volume/SKILL.md) | FA | Volume / VolumeProfile / VolumeComponent | No |
 | [postprocess](./postprocess/SKILL.md) | FA | Modern URP/HDRP post-processing | No |
@@ -89,6 +90,7 @@ These modules provide design guidance only.
 | [addressables-design](./addressables-design/SKILL.md) | Addressables dual-version (1.22.3 Unity 2022 / 2.9.1 Unity 6) source-anchored rules (init/handles/loading/scene/update/download/assetref/pitfalls) with migration table |
 | [unitask-design](./unitask-design/SKILL.md) | UniTask 2.5.10 source-anchored rules (basics/playerloop/cancellation/composition/conversion/asyncenumerable/triggers/pitfalls) |
 | [dotween-design](./dotween-design/SKILL.md) | DOTween 1.3.015 source-anchored rules (basics/tween/sequence/shortcuts/ease/lifetime/integration/pitfalls) |
+| [shadergraph-design](./shadergraph-design/SKILL.md) | ShaderGraph dual-version source-anchored rules (versions/node subset/recipes/pitfalls/review) |
 
 ## Batch-First Rule
 

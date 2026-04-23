@@ -21,6 +21,15 @@ namespace UnitySkills.Tests.Core
             Assert.IsTrue(SkillRouter.HasSkill("shadergraph_create_graph"));
             Assert.IsTrue(SkillRouter.HasSkill("shadergraph_create_subgraph"));
             Assert.IsTrue(SkillRouter.HasSkill("shadergraph_get_info"));
+            Assert.IsTrue(SkillRouter.HasSkill("shadergraph_get_structure"));
+            Assert.IsTrue(SkillRouter.HasSkill("shadergraph_list_supported_nodes"));
+            Assert.IsTrue(SkillRouter.HasSkill("shadergraph_add_node"));
+            Assert.IsTrue(SkillRouter.HasSkill("shadergraph_remove_node"));
+            Assert.IsTrue(SkillRouter.HasSkill("shadergraph_move_node"));
+            Assert.IsTrue(SkillRouter.HasSkill("shadergraph_connect_nodes"));
+            Assert.IsTrue(SkillRouter.HasSkill("shadergraph_disconnect_nodes"));
+            Assert.IsTrue(SkillRouter.HasSkill("shadergraph_set_node_defaults"));
+            Assert.IsTrue(SkillRouter.HasSkill("shadergraph_set_node_settings"));
             Assert.IsTrue(SkillRouter.HasSkill("shadergraph_add_property"));
             Assert.IsTrue(SkillRouter.HasSkill("shadergraph_add_keyword"));
         }

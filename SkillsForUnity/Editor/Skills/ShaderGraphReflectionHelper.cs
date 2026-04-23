@@ -745,6 +745,34 @@ namespace UnitySkills
             };
         }
 
+        public static object DescribeGraphStructure(ShaderGraphDocument document, object graph, int maxNodes, int maxEdges)
+        {
+            if (graph == null)
+                return DescribeGraphStructure(document, maxNodes, maxEdges);
+
+            var nodes = GetGraphNodes(graph)
+                .Select(node => DescribeRuntimeNode(graph, node))
+                .Where(node => node != null)
+                .Take(Math.Max(1, maxNodes))
+                .ToArray();
+
+            var edges = GetGraphEdges(graph)
+                .Select(DescribeRuntimeEdge)
+                .Where(edge => edge != null)
+                .Take(Math.Max(1, maxEdges))
+                .ToArray();
+
+            return new
+            {
+                success = true,
+                assetPath = document.AssetPath,
+                nodes,
+                edges,
+                properties = GetProperties(document),
+                keywords = GetKeywords(document)
+            };
+        }
+
         public static object[] GetProperties(ShaderGraphDocument document)
         {
             return ExtractReferenceIds(document.Root["m_Properties"])
@@ -773,6 +801,303 @@ namespace UnitySkills
             return GetKeywords(document)
                 .Select(JObject.FromObject)
                 .FirstOrDefault(item => MatchesNamedItem(item, displayName, referenceName));
+        }
+
+        public static object[] GetSupportedNodes()
+        {
+            return ShaderGraphNodeRegistry.GetDescriptors()
+                .Select(DescribeSupportedNode)
+                .Where(item => item != null)
+                .ToArray();
+        }
+
+        public static bool TryAddNode(
+            string assetPath,
+            string nodeType,
+            float x,
+            float y,
+            object settings,
+            out object nodeInfo,
+            out string error)
+        {
+            nodeInfo = null;
+            error = null;
+
+            var descriptor = ShaderGraphNodeRegistry.Find(nodeType);
+            if (descriptor == null)
+            {
+                error = $"Unsupported nodeType '{nodeType}'. Use shadergraph_list_supported_nodes to inspect supported values.";
+                return false;
+            }
+
+            if (!TryLoadGraphData(assetPath, out var graph, out error))
+                return false;
+
+            var runtimeType = FindTypeInAssemblies(descriptor.RuntimeTypeName);
+            if (runtimeType == null)
+            {
+                error = $"Shader Graph node runtime type not found: {descriptor.RuntimeTypeName}";
+                return false;
+            }
+
+            if (!ValidateNodeGraphScope(graph, descriptor, out error))
+                return false;
+
+            try
+            {
+                var node = Activator.CreateInstance(runtimeType, true);
+                if (!TryApplyNodeSettings(graph, node, descriptor, settings, requireSettings: false, out error))
+                    return false;
+
+                SetNodePosition(node, x, y);
+                InvokeMethod(graph, "AddNode", node);
+                if (!TrySaveGraphData(assetPath, graph, out error))
+                    return false;
+
+                nodeInfo = DescribeRuntimeNode(graph, node);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                error = ex.InnerException?.Message ?? ex.Message;
+                return false;
+            }
+        }
+
+        public static bool TryRemoveNode(string assetPath, string nodeId, out object removedInfo, out string error)
+        {
+            removedInfo = null;
+            error = null;
+
+            if (!TryLoadGraphData(assetPath, out var graph, out error))
+                return false;
+
+            var node = FindGraphNode(graph, nodeId);
+            if (node == null)
+            {
+                error = $"Node '{nodeId}' was not found";
+                return false;
+            }
+
+            if (!TryGetBoolValue(GetMemberValue(node, "canDeleteNode"), true))
+            {
+                error = $"Node '{nodeId}' cannot be deleted";
+                return false;
+            }
+
+            var removedEdgeCount = GetGraphEdges(graph)
+                .Count(edge => EdgeTouchesNode(edge, nodeId));
+            var typeName = node.GetType().Name;
+            var name = GetMemberValue(node, "name")?.ToString();
+
+            try
+            {
+                InvokeMethod(graph, "RemoveNode", node);
+                if (!TrySaveGraphData(assetPath, graph, out error))
+                    return false;
+
+                removedInfo = new
+                {
+                    nodeId,
+                    type = typeName,
+                    name,
+                    removedEdgeCount
+                };
+                return true;
+            }
+            catch (Exception ex)
+            {
+                error = ex.InnerException?.Message ?? ex.Message;
+                return false;
+            }
+        }
+
+        public static bool TryMoveNode(string assetPath, string nodeId, float x, float y, out object nodeInfo, out string error)
+        {
+            nodeInfo = null;
+            error = null;
+
+            if (!TryLoadGraphData(assetPath, out var graph, out error))
+                return false;
+
+            var node = FindGraphNode(graph, nodeId);
+            if (node == null)
+            {
+                error = $"Node '{nodeId}' was not found";
+                return false;
+            }
+
+            try
+            {
+                SetNodePosition(node, x, y);
+                if (!TrySaveGraphData(assetPath, graph, out error))
+                    return false;
+
+                nodeInfo = DescribeRuntimeNode(graph, node);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                error = ex.InnerException?.Message ?? ex.Message;
+                return false;
+            }
+        }
+
+        public static bool TryConnectNodes(
+            string assetPath,
+            string fromNodeId,
+            int fromSlotId,
+            string toNodeId,
+            int toSlotId,
+            out object edgeInfo,
+            out string error)
+        {
+            edgeInfo = null;
+            error = null;
+
+            if (!TryLoadGraphData(assetPath, out var graph, out error))
+                return false;
+
+            if (!TryResolveNodeAndSlot(graph, fromNodeId, fromSlotId, requireInput: false, out var fromNode, out _, out error))
+                return false;
+            if (!TryResolveNodeAndSlot(graph, toNodeId, toSlotId, requireInput: true, out var toNode, out _, out error))
+                return false;
+
+            var existing = FindExactEdge(graph, fromNodeId, fromSlotId, toNodeId, toSlotId);
+            if (existing != null)
+            {
+                edgeInfo = DescribeRuntimeEdge(existing);
+                return true;
+            }
+
+            try
+            {
+                var fromSlotRef = InvokeMethod(fromNode, "GetSlotReference", fromSlotId);
+                var toSlotRef = InvokeMethod(toNode, "GetSlotReference", toSlotId);
+                var edge = InvokeMethod(graph, "Connect", fromSlotRef, toSlotRef);
+                if (!TrySaveGraphData(assetPath, graph, out error))
+                    return false;
+
+                edgeInfo = DescribeRuntimeEdge(edge);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                error = ex.InnerException?.Message ?? ex.Message;
+                return false;
+            }
+        }
+
+        public static bool TryDisconnectNodes(
+            string assetPath,
+            string fromNodeId,
+            int fromSlotId,
+            string toNodeId,
+            int toSlotId,
+            out object edgeInfo,
+            out string error)
+        {
+            edgeInfo = null;
+            error = null;
+
+            if (!TryLoadGraphData(assetPath, out var graph, out error))
+                return false;
+
+            var edge = FindExactEdge(graph, fromNodeId, fromSlotId, toNodeId, toSlotId);
+            if (edge == null)
+            {
+                error = $"Edge {fromNodeId}:{fromSlotId} -> {toNodeId}:{toSlotId} was not found";
+                return false;
+            }
+
+            edgeInfo = DescribeRuntimeEdge(edge);
+
+            try
+            {
+                InvokeMethod(graph, "RemoveEdge", edge);
+                if (!TrySaveGraphData(assetPath, graph, out error))
+                    return false;
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                error = ex.InnerException?.Message ?? ex.Message;
+                return false;
+            }
+        }
+
+        public static bool TrySetNodeDefaults(
+            string assetPath,
+            string nodeId,
+            int slotId,
+            object value,
+            out object nodeInfo,
+            out string error)
+        {
+            nodeInfo = null;
+            error = null;
+
+            if (!TryLoadGraphData(assetPath, out var graph, out error))
+                return false;
+
+            if (!TryResolveNodeAndSlot(graph, nodeId, slotId, requireInput: true, out var node, out var slot, out error))
+                return false;
+
+            if (IsSlotConnected(graph, nodeId, slotId))
+            {
+                error = $"Input slot {slotId} on node '{nodeId}' is connected. Disconnect it before setting a default value.";
+                return false;
+            }
+
+            if (!TrySetSlotValue(slot, value, out error))
+                return false;
+
+            SyncNodeSettingFromInputSlot(node, slotId, slot);
+            InvokeNodeUpdate(node);
+
+            if (!TrySaveGraphData(assetPath, graph, out error))
+                return false;
+
+            nodeInfo = DescribeRuntimeNode(graph, node);
+            return true;
+        }
+
+        public static bool TrySetNodeSettings(
+            string assetPath,
+            string nodeId,
+            object settings,
+            out object nodeInfo,
+            out string error)
+        {
+            nodeInfo = null;
+            error = null;
+
+            if (!TryLoadGraphData(assetPath, out var graph, out error))
+                return false;
+
+            var node = FindGraphNode(graph, nodeId);
+            if (node == null)
+            {
+                error = $"Node '{nodeId}' was not found";
+                return false;
+            }
+
+            var descriptor = ShaderGraphNodeRegistry.Find(node.GetType().Name);
+            if (descriptor == null)
+            {
+                error = $"Node type '{node.GetType().Name}' is not in the supported editing subset";
+                return false;
+            }
+
+            if (!TryApplyNodeSettings(graph, node, descriptor, settings, requireSettings: true, out error))
+                return false;
+
+            if (!TrySaveGraphData(assetPath, graph, out error))
+                return false;
+
+            nodeInfo = DescribeRuntimeNode(graph, node);
+            return true;
         }
 
         private static object CreatePropertyInstance(
@@ -827,10 +1152,10 @@ namespace UnitySkills
                         SetMemberValue(property, "value", ConvertToFloat(value));
                         return true;
                     case "Vector2ShaderProperty":
-                        SetMemberValue(property, "value", ConvertToVector4(value, 2));
+                        SetMemberValue(property, "value", ConvertToVector2(value));
                         return true;
                     case "Vector3ShaderProperty":
-                        SetMemberValue(property, "value", ConvertToVector4(value, 3));
+                        SetMemberValue(property, "value", ConvertToVector3(value));
                         return true;
                     case "Vector4ShaderProperty":
                         SetMemberValue(property, "value", ConvertToVector4(value, 4));
@@ -1121,6 +1446,718 @@ namespace UnitySkills
                 .Select(item => item?["m_Id"]?.ToString())
                 .Where(id => !string.IsNullOrWhiteSpace(id))
                 .ToList();
+        }
+
+        private static object DescribeSupportedNode(ShaderGraphSupportedNodeDescriptor descriptor)
+        {
+            var runtimeType = FindTypeInAssemblies(descriptor.RuntimeTypeName);
+            if (runtimeType == null)
+                return null;
+
+            var node = Activator.CreateInstance(runtimeType, true);
+            if (string.Equals(descriptor.NodeType, "PropertyNode", StringComparison.Ordinal))
+            {
+                var property = CreatePropertyInstance(null, "float", "PreviewProperty", "_PreviewProperty", 1f, true, false, out var propertyError);
+                if (property == null)
+                    return null;
+
+                SetMemberValue(node, "property", property);
+            }
+
+            return new
+            {
+                nodeType = descriptor.NodeType,
+                aliases = descriptor.Aliases,
+                runtimeType = descriptor.RuntimeTypeName,
+                validatedVersions = descriptor.ValidatedVersions,
+                supportsGraph = descriptor.SupportsGraph,
+                supportsSubGraph = descriptor.SupportsSubGraph,
+                requiresExistingProperty = descriptor.RequiresExistingProperty,
+                notes = descriptor.Notes,
+                settings = descriptor.Settings.Select(setting => new
+                {
+                    name = setting.Name,
+                    valueType = setting.ValueType,
+                    options = setting.Options,
+                    notes = setting.Notes
+                }).ToArray(),
+                slots = DescribeNodeSlots(null, node, GetMemberValue(node, "objectId")?.ToString())
+            };
+        }
+
+        private static object DescribeRuntimeNode(object graph, object node)
+        {
+            if (node == null)
+                return null;
+
+            var nodeId = GetMemberValue(node, "objectId")?.ToString();
+            var slots = DescribeNodeSlots(graph, node, nodeId);
+            var position = DescribeNodePosition(node);
+
+            return new
+            {
+                nodeId,
+                id = nodeId,
+                type = node.GetType().Name,
+                name = GetMemberValue(node, "name")?.ToString() ?? node.GetType().Name,
+                position,
+                slotCount = slots.Length,
+                slots,
+                settings = DescribeNodeSettings(node)
+            };
+        }
+
+        private static object[] DescribeNodeSlots(object graph, object node, string nodeId)
+        {
+            var inputSlots = GetNodeSlots(node, true)
+                .Select(slot => DescribeRuntimeSlot(graph, nodeId, slot))
+                .Where(slot => slot != null);
+            var outputSlots = GetNodeSlots(node, false)
+                .Select(slot => DescribeRuntimeSlot(graph, nodeId, slot))
+                .Where(slot => slot != null);
+
+            return inputSlots
+                .Concat(outputSlots)
+                .OrderBy(slot => JObject.FromObject(slot)["slotId"]?.ToObject<int?>() ?? int.MaxValue)
+                .ToArray();
+        }
+
+        private static object DescribeRuntimeSlot(object graph, string nodeId, object slot)
+        {
+            if (slot == null)
+                return null;
+
+            var slotId = Convert.ToInt32(GetMemberValue(slot, "id"), CultureInfo.InvariantCulture);
+            var isInput = TryGetBoolValue(GetMemberValue(slot, "isInputSlot"));
+            var isOutput = TryGetBoolValue(GetMemberValue(slot, "isOutputSlot"));
+            var rawValue = isInput ? GetSlotValue(slot) : null;
+
+            return new
+            {
+                slotId,
+                displayName = GetMemberValue(slot, "displayName")?.ToString(),
+                direction = isInput ? "input" : (isOutput ? "output" : "unknown"),
+                valueType = GetSlotTypeName(slot, "valueType"),
+                concreteValueType = GetSlotTypeName(slot, "concreteValueType"),
+                isConnected = graph != null && !string.IsNullOrWhiteSpace(nodeId) && IsSlotConnected(graph, nodeId, slotId),
+                defaultValue = isInput ? SerializeSlotValue(rawValue) : null
+            };
+        }
+
+        private static object DescribeNodeSettings(object node)
+        {
+            if (node == null)
+                return null;
+
+            switch (node.GetType().Name)
+            {
+                case "PropertyNode":
+                {
+                    var property = GetMemberValue(node, "property");
+                    return new
+                    {
+                        propertyReferenceName = property != null ? GetMemberValue(property, "referenceName")?.ToString() : null
+                    };
+                }
+                case "BooleanNode":
+                    return new
+                    {
+                        value = TryGetBoolValue(GetMemberValue(node, "m_Value"))
+                    };
+                case "ColorNode":
+                {
+                    var colorData = GetMemberValue(node, "m_Color");
+                    var colorValue = colorData != null ? GetMemberValue(colorData, "color") : null;
+                    var colorMode = colorData != null ? GetMemberValue(colorData, "mode")?.ToString() : null;
+                    return new
+                    {
+                        value = RenderPipelineSkillsCommon.ToSerializableValue(colorValue),
+                        mode = colorMode
+                    };
+                }
+                case "Vector1Node":
+                    return new
+                    {
+                        value = GetMemberValue(node, "m_Value")
+                    };
+                case "Vector2Node":
+                case "Vector3Node":
+                case "Vector4Node":
+                    return new
+                    {
+                        value = RenderPipelineSkillsCommon.ToSerializableValue(GetMemberValue(node, "m_Value"))
+                    };
+                case "UVNode":
+                    return new
+                    {
+                        channel = GetMemberValue(node, "uvChannel")?.ToString() ?? GetMemberValue(node, "m_OutputChannel")?.ToString()
+                    };
+                case "PositionNode":
+                case "NormalVectorNode":
+                case "ViewDirectionNode":
+                    return new
+                    {
+                        space = GetMemberValue(node, "space")?.ToString() ?? GetMemberValue(node, "m_Space")?.ToString()
+                    };
+                default:
+                    return new { };
+            }
+        }
+
+        private static object DescribeNodePosition(object node)
+        {
+            var drawState = GetMemberValue(node, "drawState");
+            var rectValue = drawState != null ? GetMemberValue(drawState, "position") : null;
+            if (!(rectValue is Rect rect))
+                return null;
+
+            return new
+            {
+                x = rect.x,
+                y = rect.y,
+                width = rect.width,
+                height = rect.height
+            };
+        }
+
+        private static object DescribeRuntimeEdge(object edge)
+        {
+            if (edge == null)
+                return null;
+
+            var outputSlotRef = GetMemberValue(edge, "outputSlot");
+            var inputSlotRef = GetMemberValue(edge, "inputSlot");
+            var outputNode = outputSlotRef != null ? GetMemberValue(outputSlotRef, "node") : null;
+            var inputNode = inputSlotRef != null ? GetMemberValue(inputSlotRef, "node") : null;
+            var outputNodeId = outputNode != null ? GetMemberValue(outputNode, "objectId")?.ToString() : null;
+            var inputNodeId = inputNode != null ? GetMemberValue(inputNode, "objectId")?.ToString() : null;
+
+            return new
+            {
+                outputNodeId,
+                outputNode = outputNode != null ? GetMemberValue(outputNode, "name")?.ToString() ?? outputNode.GetType().Name : null,
+                outputSlotId = outputSlotRef != null ? Convert.ToInt32(GetMemberValue(outputSlotRef, "slotId"), CultureInfo.InvariantCulture) : (int?)null,
+                inputNodeId,
+                inputNode = inputNode != null ? GetMemberValue(inputNode, "name")?.ToString() ?? inputNode.GetType().Name : null,
+                inputSlotId = inputSlotRef != null ? Convert.ToInt32(GetMemberValue(inputSlotRef, "slotId"), CultureInfo.InvariantCulture) : (int?)null
+            };
+        }
+
+        private static IEnumerable<object> GetGraphNodes(object graph)
+        {
+            var nodeType = FindTypeInAssemblies("UnityEditor.ShaderGraph.AbstractMaterialNode");
+            if (graph == null || nodeType == null)
+                return Enumerable.Empty<object>();
+
+            var method = graph.GetType().GetMethods(InstanceFlags)
+                .FirstOrDefault(candidate =>
+                    string.Equals(candidate.Name, "GetNodes", StringComparison.Ordinal) &&
+                    candidate.IsGenericMethodDefinition &&
+                    candidate.GetParameters().Length == 0);
+            if (method == null)
+                return Enumerable.Empty<object>();
+
+            var result = method.MakeGenericMethod(nodeType).Invoke(graph, Array.Empty<object>()) as IEnumerable;
+            return result?.Cast<object>() ?? Enumerable.Empty<object>();
+        }
+
+        private static IEnumerable<object> GetGraphEdges(object graph)
+        {
+            return (GetMemberValue(graph, "edges") as IEnumerable)?.Cast<object>() ?? Enumerable.Empty<object>();
+        }
+
+        private static object FindGraphNode(object graph, string nodeId)
+        {
+            return GetGraphNodes(graph)
+                .FirstOrDefault(node => string.Equals(GetMemberValue(node, "objectId")?.ToString(), nodeId, StringComparison.Ordinal));
+        }
+
+        private static object[] GetNodeSlots(object node, bool inputs)
+        {
+            if (node == null)
+                return Array.Empty<object>();
+
+            var materialSlotType = FindTypeInAssemblies("UnityEditor.ShaderGraph.MaterialSlot");
+            if (materialSlotType == null)
+                return Array.Empty<object>();
+
+            var listType = typeof(List<>).MakeGenericType(materialSlotType);
+            var slotList = Activator.CreateInstance(listType);
+            var method = node.GetType().GetMethods(InstanceFlags)
+                .FirstOrDefault(candidate =>
+                    string.Equals(candidate.Name, inputs ? "GetInputSlots" : "GetOutputSlots", StringComparison.Ordinal) &&
+                    candidate.IsGenericMethodDefinition &&
+                    candidate.GetParameters().Length == 1);
+            if (method == null)
+                return Array.Empty<object>();
+
+            method.MakeGenericMethod(materialSlotType).Invoke(node, new[] { slotList });
+            return (slotList as IEnumerable)?.Cast<object>().ToArray() ?? Array.Empty<object>();
+        }
+
+        private static bool ValidateNodeGraphScope(object graph, ShaderGraphSupportedNodeDescriptor descriptor, out string error)
+        {
+            error = null;
+            var isSubGraph = TryGetBoolValue(GetMemberValue(graph, "isSubGraph"));
+            if (isSubGraph && !descriptor.SupportsSubGraph)
+            {
+                error = $"{descriptor.NodeType} is not enabled for SubGraph editing";
+                return false;
+            }
+
+            if (!isSubGraph && !descriptor.SupportsGraph)
+            {
+                error = $"{descriptor.NodeType} is not enabled for Graph editing";
+                return false;
+            }
+
+            return true;
+        }
+
+        private static bool TryResolveNodeAndSlot(object graph, string nodeId, int slotId, bool requireInput, out object node, out object slot, out string error)
+        {
+            node = FindGraphNode(graph, nodeId);
+            slot = null;
+            error = null;
+
+            if (node == null)
+            {
+                error = $"Node '{nodeId}' was not found";
+                return false;
+            }
+
+            slot = GetNodeSlots(node, inputs: requireInput)
+                .FirstOrDefault(candidate => Convert.ToInt32(GetMemberValue(candidate, "id"), CultureInfo.InvariantCulture) == slotId);
+
+            if (slot == null)
+            {
+                error = $"Slot {slotId} was not found on node '{nodeId}'";
+                return false;
+            }
+
+            return true;
+        }
+
+        private static object FindExactEdge(object graph, string fromNodeId, int fromSlotId, string toNodeId, int toSlotId)
+        {
+            return GetGraphEdges(graph).FirstOrDefault(edge =>
+            {
+                var outputSlotRef = GetMemberValue(edge, "outputSlot");
+                var inputSlotRef = GetMemberValue(edge, "inputSlot");
+                var outputNode = outputSlotRef != null ? GetMemberValue(outputSlotRef, "node") : null;
+                var inputNode = inputSlotRef != null ? GetMemberValue(inputSlotRef, "node") : null;
+                var outputNodeId = outputNode != null ? GetMemberValue(outputNode, "objectId")?.ToString() : null;
+                var inputNodeId = inputNode != null ? GetMemberValue(inputNode, "objectId")?.ToString() : null;
+                var outputSlotId = outputSlotRef != null ? Convert.ToInt32(GetMemberValue(outputSlotRef, "slotId"), CultureInfo.InvariantCulture) : -1;
+                var inputSlotId = inputSlotRef != null ? Convert.ToInt32(GetMemberValue(inputSlotRef, "slotId"), CultureInfo.InvariantCulture) : -1;
+
+                return string.Equals(outputNodeId, fromNodeId, StringComparison.Ordinal) &&
+                       outputSlotId == fromSlotId &&
+                       string.Equals(inputNodeId, toNodeId, StringComparison.Ordinal) &&
+                       inputSlotId == toSlotId;
+            });
+        }
+
+        private static bool EdgeTouchesNode(object edge, string nodeId)
+        {
+            var outputSlotRef = GetMemberValue(edge, "outputSlot");
+            var inputSlotRef = GetMemberValue(edge, "inputSlot");
+            var outputNode = outputSlotRef != null ? GetMemberValue(outputSlotRef, "node") : null;
+            var inputNode = inputSlotRef != null ? GetMemberValue(inputSlotRef, "node") : null;
+            var outputNodeId = outputNode != null ? GetMemberValue(outputNode, "objectId")?.ToString() : null;
+            var inputNodeId = inputNode != null ? GetMemberValue(inputNode, "objectId")?.ToString() : null;
+            return string.Equals(outputNodeId, nodeId, StringComparison.Ordinal) ||
+                   string.Equals(inputNodeId, nodeId, StringComparison.Ordinal);
+        }
+
+        private static bool IsSlotConnected(object graph, string nodeId, int slotId)
+        {
+            return GetGraphEdges(graph).Any(edge =>
+            {
+                var outputSlotRef = GetMemberValue(edge, "outputSlot");
+                var inputSlotRef = GetMemberValue(edge, "inputSlot");
+                return SlotReferenceMatches(outputSlotRef, nodeId, slotId) || SlotReferenceMatches(inputSlotRef, nodeId, slotId);
+            });
+        }
+
+        private static bool SlotReferenceMatches(object slotReference, string nodeId, int slotId)
+        {
+            if (slotReference == null)
+                return false;
+
+            var node = GetMemberValue(slotReference, "node");
+            var candidateNodeId = node != null ? GetMemberValue(node, "objectId")?.ToString() : null;
+            var candidateSlotId = Convert.ToInt32(GetMemberValue(slotReference, "slotId"), CultureInfo.InvariantCulture);
+            return string.Equals(candidateNodeId, nodeId, StringComparison.Ordinal) && candidateSlotId == slotId;
+        }
+
+        private static string GetSlotTypeName(object slot, string memberName)
+        {
+            var value = GetMemberValue(slot, memberName);
+            return value?.ToString();
+        }
+
+        private static object GetSlotValue(object slot)
+        {
+            return GetMemberValue(slot, "value");
+        }
+
+        private static object SerializeSlotValue(object value)
+        {
+            if (value == null)
+                return null;
+
+            if (value is Matrix4x4 matrix)
+            {
+                return new
+                {
+                    m00 = matrix.m00, m01 = matrix.m01, m02 = matrix.m02, m03 = matrix.m03,
+                    m10 = matrix.m10, m11 = matrix.m11, m12 = matrix.m12, m13 = matrix.m13,
+                    m20 = matrix.m20, m21 = matrix.m21, m22 = matrix.m22, m23 = matrix.m23,
+                    m30 = matrix.m30, m31 = matrix.m31, m32 = matrix.m32, m33 = matrix.m33
+                };
+            }
+
+            return RenderPipelineSkillsCommon.ToSerializableValue(value);
+        }
+
+        private static void SetNodePosition(object node, float x, float y)
+        {
+            var drawState = GetMemberValue(node, "drawState");
+            if (drawState == null)
+                return;
+
+            var rect = GetMemberValue(drawState, "position") is Rect currentRect
+                ? currentRect
+                : new Rect(0f, 0f, 0f, 0f);
+            rect.position = new Vector2(x, y);
+            SetMemberValue(drawState, "position", rect);
+            SetMemberValue(node, "drawState", drawState);
+        }
+
+        private static bool TrySetSlotValue(object slot, object value, out string error)
+        {
+            error = null;
+
+            var property = GetPropertyRecursive(slot.GetType(), "value");
+            if (property == null || !property.CanWrite)
+            {
+                error = "This slot does not expose a writable default value";
+                return false;
+            }
+
+            if (!TryConvertNodeValue(value, property.PropertyType, out var converted, out error))
+                return false;
+
+            property.SetValue(slot, converted, null);
+            return true;
+        }
+
+        private static bool TryConvertNodeValue(object rawValue, Type targetType, out object converted, out string error)
+        {
+            converted = null;
+            error = null;
+
+            try
+            {
+                if (targetType == typeof(float))
+                {
+                    converted = ConvertToFloat(rawValue);
+                    return true;
+                }
+
+                if (targetType == typeof(int))
+                {
+                    converted = Convert.ToInt32(rawValue, CultureInfo.InvariantCulture);
+                    return true;
+                }
+
+                if (targetType == typeof(bool))
+                {
+                    converted = ConvertToBool(rawValue);
+                    return true;
+                }
+
+                if (targetType == typeof(Vector2))
+                {
+                    converted = ConvertToVector2(rawValue);
+                    return true;
+                }
+
+                if (targetType == typeof(Vector3))
+                {
+                    converted = ConvertToVector3(rawValue);
+                    return true;
+                }
+
+                if (targetType == typeof(Vector4))
+                {
+                    if (rawValue is string stringValue && stringValue.TrimStart().StartsWith("#", StringComparison.Ordinal))
+                    {
+                        var color = ConvertToColor(rawValue);
+                        converted = new Vector4(color.r, color.g, color.b, color.a);
+                        return true;
+                    }
+
+                    converted = ConvertToVector4(rawValue, 4);
+                    return true;
+                }
+
+                if (targetType == typeof(Color))
+                {
+                    converted = ConvertToColor(rawValue);
+                    return true;
+                }
+
+                error = $"Unsupported slot default value type: {targetType.Name}";
+                return false;
+            }
+            catch (Exception ex)
+            {
+                error = ex.Message;
+                return false;
+            }
+        }
+
+        private static void SyncNodeSettingFromInputSlot(object node, int slotId, object slot)
+        {
+            switch (node.GetType().Name)
+            {
+                case "Vector1Node" when slotId == 1:
+                    SetMemberValue(node, "m_Value", Convert.ToSingle(GetSlotValue(slot), CultureInfo.InvariantCulture));
+                    break;
+                case "Vector2Node":
+                {
+                    var current = (Vector2)GetMemberValue(node, "m_Value");
+                    var slotValue = Convert.ToSingle(GetSlotValue(slot), CultureInfo.InvariantCulture);
+                    if (slotId == 1) current.x = slotValue;
+                    if (slotId == 2) current.y = slotValue;
+                    SetMemberValue(node, "m_Value", current);
+                    break;
+                }
+                case "Vector3Node":
+                {
+                    var current = (Vector3)GetMemberValue(node, "m_Value");
+                    var slotValue = Convert.ToSingle(GetSlotValue(slot), CultureInfo.InvariantCulture);
+                    if (slotId == 1) current.x = slotValue;
+                    if (slotId == 2) current.y = slotValue;
+                    if (slotId == 3) current.z = slotValue;
+                    SetMemberValue(node, "m_Value", current);
+                    break;
+                }
+                case "Vector4Node":
+                {
+                    var current = (Vector4)GetMemberValue(node, "m_Value");
+                    var slotValue = Convert.ToSingle(GetSlotValue(slot), CultureInfo.InvariantCulture);
+                    if (slotId == 1) current.x = slotValue;
+                    if (slotId == 2) current.y = slotValue;
+                    if (slotId == 3) current.z = slotValue;
+                    if (slotId == 4) current.w = slotValue;
+                    SetMemberValue(node, "m_Value", current);
+                    break;
+                }
+            }
+        }
+
+        private static bool TryApplyNodeSettings(object graph, object node, ShaderGraphSupportedNodeDescriptor descriptor, object settings, bool requireSettings, out string error)
+        {
+            error = null;
+            if (!TryNormalizeSettings(settings, out var settingsObject, out error))
+                return false;
+
+            if ((settingsObject == null || !settingsObject.Properties().Any()))
+            {
+                if (requireSettings || descriptor.RequiresExistingProperty)
+                {
+                    error = "settings is required";
+                    return false;
+                }
+
+                return true;
+            }
+
+            var allowed = new HashSet<string>(descriptor.Settings.Select(setting => setting.Name), StringComparer.OrdinalIgnoreCase);
+            foreach (var property in settingsObject.Properties())
+            {
+                if (!allowed.Contains(property.Name))
+                {
+                    error = $"Unsupported setting '{property.Name}' for nodeType '{descriptor.NodeType}'. Allowed values: {string.Join(", ", allowed.OrderBy(x => x, StringComparer.OrdinalIgnoreCase))}";
+                    return false;
+                }
+            }
+
+            switch (descriptor.NodeType)
+            {
+                case "PropertyNode":
+                {
+                    var referenceName = settingsObject["propertyReferenceName"]?.ToString();
+                    if (string.IsNullOrWhiteSpace(referenceName))
+                    {
+                        error = "PropertyNode requires settings.propertyReferenceName";
+                        return false;
+                    }
+
+                    var property = FindRuntimeShaderProperty(graph, referenceName);
+                    if (property == null)
+                    {
+                        error = $"Shader Graph property '{referenceName}' was not found";
+                        return false;
+                    }
+
+                    SetMemberValue(node, "property", property);
+                    InvokeNodeUpdate(node);
+                    return true;
+                }
+                case "BooleanNode":
+                    SetMemberValue(node, "m_Value", ConvertToBool(settingsObject["value"]));
+                    InvokeNodeUpdate(node);
+                    return true;
+                case "ColorNode":
+                    return TrySetColorNodeValue(node, settingsObject["value"], out error);
+                case "Vector1Node":
+                    SetMemberValue(node, "m_Value", ConvertToFloat(settingsObject["value"]));
+                    InvokeNodeUpdate(node);
+                    return true;
+                case "Vector2Node":
+                    SetMemberValue(node, "m_Value", ConvertToVector2(settingsObject["value"]));
+                    InvokeNodeUpdate(node);
+                    return true;
+                case "Vector3Node":
+                    SetMemberValue(node, "m_Value", ConvertToVector3(settingsObject["value"]));
+                    InvokeNodeUpdate(node);
+                    return true;
+                case "Vector4Node":
+                    SetMemberValue(node, "m_Value", ConvertToVector4(settingsObject["value"], 4));
+                    InvokeNodeUpdate(node);
+                    return true;
+                case "UVNode":
+                    if (!TrySetEnumMember(node, "m_OutputChannel", settingsObject["channel"]?.ToString(), out error))
+                        return false;
+                    InvokeNodeUpdate(node);
+                    return true;
+                case "PositionNode":
+                case "NormalVectorNode":
+                case "ViewDirectionNode":
+                    if (!TrySetEnumMember(node, "m_Space", settingsObject["space"]?.ToString(), out error))
+                        return false;
+                    InvokeNodeUpdate(node);
+                    return true;
+                default:
+                    error = $"Node settings are not supported for '{descriptor.NodeType}'";
+                    return false;
+            }
+        }
+
+        private static bool TryNormalizeSettings(object settings, out JObject settingsObject, out string error)
+        {
+            error = null;
+            settingsObject = null;
+
+            if (settings == null)
+                return true;
+
+            if (settings is JObject jobject)
+            {
+                settingsObject = jobject;
+                return true;
+            }
+
+            if (settings is JToken jtoken)
+            {
+                if (jtoken.Type != JTokenType.Object)
+                {
+                    error = "settings must be a JSON object";
+                    return false;
+                }
+
+                settingsObject = (JObject)jtoken;
+                return true;
+            }
+
+            if (settings is string json)
+            {
+                try
+                {
+                    settingsObject = JObject.Parse(json);
+                    return true;
+                }
+                catch (Exception ex)
+                {
+                    error = $"Failed to parse settings JSON: {ex.Message}";
+                    return false;
+                }
+            }
+
+            settingsObject = JObject.FromObject(settings);
+            return true;
+        }
+
+        private static object FindRuntimeShaderProperty(object graph, string referenceName)
+        {
+            var properties = GetMemberValue(graph, "properties") as IEnumerable;
+            if (properties == null)
+                return null;
+
+            foreach (var property in properties)
+            {
+                if (string.Equals(GetMemberValue(property, "referenceName")?.ToString(), referenceName, StringComparison.OrdinalIgnoreCase))
+                    return property;
+            }
+
+            return null;
+        }
+
+        private static bool TrySetColorNodeValue(object node, object rawValue, out string error)
+        {
+            error = null;
+
+            try
+            {
+                var colorFieldType = GetFieldRecursive(node.GetType(), "m_Color")?.FieldType;
+                if (colorFieldType == null)
+                {
+                    error = "ColorNode backing field was not found";
+                    return false;
+                }
+
+                var colorStruct = Activator.CreateInstance(colorFieldType);
+                SetMemberValue(colorStruct, "color", ConvertToColor(rawValue));
+
+                var existingColor = GetMemberValue(node, "m_Color");
+                var mode = existingColor != null ? GetMemberValue(existingColor, "mode") : null;
+                if (mode == null)
+                {
+                    var colorModeType = FindTypeInAssemblies("UnityEditor.ShaderGraph.Internal.ColorMode");
+                    mode = colorModeType != null ? Enum.Parse(colorModeType, "Default") : null;
+                }
+
+                if (mode != null)
+                    SetMemberValue(colorStruct, "mode", mode);
+
+                SetMemberValue(node, "m_Color", colorStruct);
+                InvokeNodeUpdate(node);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                error = ex.InnerException?.Message ?? ex.Message;
+                return false;
+            }
+        }
+
+        private static void InvokeNodeUpdate(object node)
+        {
+            if (node == null)
+                return;
+
+            try
+            {
+                InvokeMethod(node, "UpdateNodeAfterDeserialization");
+            }
+            catch
+            {
+                // Some nodes do not expose this path in the same way across versions.
+            }
         }
 
         private static object DescribeNode(JObject node)
@@ -1541,6 +2578,33 @@ namespace UnitySkills
             }
 
             return Convert.ToInt32(value, CultureInfo.InvariantCulture) != 0;
+        }
+
+        private static bool TryGetBoolValue(object value, bool fallback = false)
+        {
+            if (value == null)
+                return fallback;
+
+            try
+            {
+                return ConvertToBool(value);
+            }
+            catch
+            {
+                return fallback;
+            }
+        }
+
+        private static Vector2 ConvertToVector2(object value)
+        {
+            var vector = (Vector4)ConvertToVector4(value, 2);
+            return new Vector2(vector.x, vector.y);
+        }
+
+        private static Vector3 ConvertToVector3(object value)
+        {
+            var vector = (Vector4)ConvertToVector4(value, 3);
+            return new Vector3(vector.x, vector.y, vector.z);
         }
 
         private static object ConvertToVector4(object value, int dimensions)

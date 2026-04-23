@@ -342,16 +342,16 @@ namespace UnitySkills
                 RefreshSkillsList();
                 SkillRouter.Refresh();
             }
-            if (GUILayout.Button("Validate", GUILayout.Width(70)))
+            if (GUILayout.Button(L("validate"), GUILayout.Width(70)))
             {
                 var issues = SkillRouter.ValidateMetadata();
                 if (issues.Count == 0)
                 {
-                    SkillsLogger.Log("Metadata validation passed — all skills OK!");
+                    SkillsLogger.Log(L("metadata_validation_passed"));
                 }
                 else
                 {
-                    SkillsLogger.Log($"Metadata validation: {issues.Count} issue(s) found");
+                    SkillsLogger.Log(string.Format(L("metadata_validation_found"), issues.Count));
                     foreach (var msg in issues)
                     {
                         if (msg.StartsWith("[ERROR]"))

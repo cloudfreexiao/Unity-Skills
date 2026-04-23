@@ -216,7 +216,214 @@ namespace UnitySkills
             if (!ShaderGraphReflectionHelper.TryReadGraphDocument(assetPath, out var document, out var error))
                 return new { error };
 
+            if (ShaderGraphReflectionHelper.TryLoadGraphData(assetPath, out var graph, out _))
+                return ShaderGraphReflectionHelper.DescribeGraphStructure(document, graph, maxNodes, maxEdges);
+
             return ShaderGraphReflectionHelper.DescribeGraphStructure(document, maxNodes, maxEdges);
+        }
+
+        [UnitySkill("shadergraph_list_supported_nodes", "List the constrained Shader Graph node subset that can be safely edited",
+            Category = SkillCategory.ShaderGraph, Operation = SkillOperation.Query,
+            Tags = new[] { "shadergraph", "node", "supported", "list", "editing" },
+            Outputs = new[] { "count", "nodes" },
+            ReadOnly = true,
+            RequiresPackages = new[] { "com.unity.shadergraph" })]
+        public static object ShaderGraphListSupportedNodes()
+        {
+            if (!ShaderGraphReflectionHelper.IsShaderGraphInstalled)
+                return ShaderGraphReflectionHelper.NoShaderGraph();
+
+            var nodes = ShaderGraphReflectionHelper.GetSupportedNodes();
+            return new
+            {
+                success = true,
+                count = nodes.Length,
+                nodes
+            };
+        }
+
+        [UnitySkill("shadergraph_add_node", "Add a supported node to a Shader Graph or Sub Graph asset",
+            Category = SkillCategory.ShaderGraph, Operation = SkillOperation.Create,
+            Tags = new[] { "shadergraph", "node", "add", "graph", "subgraph" },
+            Outputs = new[] { "assetPath", "node" },
+            TracksWorkflow = true,
+            MutatesAssets = true,
+            RequiresInput = new[] { "assetPath", "nodeType" },
+            RequiresPackages = new[] { "com.unity.shadergraph" })]
+        public static object ShaderGraphAddNode(string assetPath, string nodeType, float x = 0f, float y = 0f, object settings = null)
+        {
+            if (Validate.Required(assetPath, "assetPath") is object assetErr) return assetErr;
+            if (Validate.Required(nodeType, "nodeType") is object typeErr) return typeErr;
+            if (Validate.SafePath(assetPath, "assetPath") is object pathErr) return pathErr;
+
+            SnapshotGraphAsset(assetPath);
+            if (!ShaderGraphReflectionHelper.TryAddNode(assetPath, nodeType, x, y, settings, out var nodeInfo, out var error))
+                return new { error };
+
+            return new
+            {
+                success = true,
+                assetPath,
+                node = nodeInfo
+            };
+        }
+
+        [UnitySkill("shadergraph_remove_node", "Remove a node and its related edges from a Shader Graph or Sub Graph asset",
+            Category = SkillCategory.ShaderGraph, Operation = SkillOperation.Delete,
+            Tags = new[] { "shadergraph", "node", "remove", "delete" },
+            Outputs = new[] { "assetPath", "node" },
+            TracksWorkflow = true,
+            MutatesAssets = true,
+            RequiresInput = new[] { "assetPath", "nodeId" },
+            RequiresPackages = new[] { "com.unity.shadergraph" })]
+        public static object ShaderGraphRemoveNode(string assetPath, string nodeId)
+        {
+            if (Validate.Required(assetPath, "assetPath") is object assetErr) return assetErr;
+            if (Validate.Required(nodeId, "nodeId") is object nodeErr) return nodeErr;
+            if (Validate.SafePath(assetPath, "assetPath") is object pathErr) return pathErr;
+
+            SnapshotGraphAsset(assetPath);
+            if (!ShaderGraphReflectionHelper.TryRemoveNode(assetPath, nodeId, out var removedInfo, out var error))
+                return new { error };
+
+            return new
+            {
+                success = true,
+                assetPath,
+                node = removedInfo
+            };
+        }
+
+        [UnitySkill("shadergraph_move_node", "Move a node inside a Shader Graph or Sub Graph asset",
+            Category = SkillCategory.ShaderGraph, Operation = SkillOperation.Modify,
+            Tags = new[] { "shadergraph", "node", "move", "position" },
+            Outputs = new[] { "assetPath", "node" },
+            TracksWorkflow = true,
+            MutatesAssets = true,
+            RequiresInput = new[] { "assetPath", "nodeId" },
+            RequiresPackages = new[] { "com.unity.shadergraph" })]
+        public static object ShaderGraphMoveNode(string assetPath, string nodeId, float x, float y)
+        {
+            if (Validate.Required(assetPath, "assetPath") is object assetErr) return assetErr;
+            if (Validate.Required(nodeId, "nodeId") is object nodeErr) return nodeErr;
+            if (Validate.SafePath(assetPath, "assetPath") is object pathErr) return pathErr;
+
+            SnapshotGraphAsset(assetPath);
+            if (!ShaderGraphReflectionHelper.TryMoveNode(assetPath, nodeId, x, y, out var nodeInfo, out var error))
+                return new { error };
+
+            return new
+            {
+                success = true,
+                assetPath,
+                node = nodeInfo
+            };
+        }
+
+        [UnitySkill("shadergraph_connect_nodes", "Connect an output slot to an input slot in a Shader Graph or Sub Graph asset",
+            Category = SkillCategory.ShaderGraph, Operation = SkillOperation.Modify,
+            Tags = new[] { "shadergraph", "node", "connect", "edge" },
+            Outputs = new[] { "assetPath", "edge" },
+            TracksWorkflow = true,
+            MutatesAssets = true,
+            RequiresInput = new[] { "assetPath", "fromNodeId", "fromSlotId", "toNodeId", "toSlotId" },
+            RequiresPackages = new[] { "com.unity.shadergraph" })]
+        public static object ShaderGraphConnectNodes(string assetPath, string fromNodeId, int fromSlotId, string toNodeId, int toSlotId)
+        {
+            if (Validate.Required(assetPath, "assetPath") is object assetErr) return assetErr;
+            if (Validate.Required(fromNodeId, "fromNodeId") is object fromErr) return fromErr;
+            if (Validate.Required(toNodeId, "toNodeId") is object toErr) return toErr;
+            if (Validate.SafePath(assetPath, "assetPath") is object pathErr) return pathErr;
+
+            SnapshotGraphAsset(assetPath);
+            if (!ShaderGraphReflectionHelper.TryConnectNodes(assetPath, fromNodeId, fromSlotId, toNodeId, toSlotId, out var edgeInfo, out var error))
+                return new { error };
+
+            return new
+            {
+                success = true,
+                assetPath,
+                edge = edgeInfo
+            };
+        }
+
+        [UnitySkill("shadergraph_disconnect_nodes", "Disconnect a specific edge in a Shader Graph or Sub Graph asset",
+            Category = SkillCategory.ShaderGraph, Operation = SkillOperation.Modify,
+            Tags = new[] { "shadergraph", "node", "disconnect", "edge" },
+            Outputs = new[] { "assetPath", "edge" },
+            TracksWorkflow = true,
+            MutatesAssets = true,
+            RequiresInput = new[] { "assetPath", "fromNodeId", "fromSlotId", "toNodeId", "toSlotId" },
+            RequiresPackages = new[] { "com.unity.shadergraph" })]
+        public static object ShaderGraphDisconnectNodes(string assetPath, string fromNodeId, int fromSlotId, string toNodeId, int toSlotId)
+        {
+            if (Validate.Required(assetPath, "assetPath") is object assetErr) return assetErr;
+            if (Validate.Required(fromNodeId, "fromNodeId") is object fromErr) return fromErr;
+            if (Validate.Required(toNodeId, "toNodeId") is object toErr) return toErr;
+            if (Validate.SafePath(assetPath, "assetPath") is object pathErr) return pathErr;
+
+            SnapshotGraphAsset(assetPath);
+            if (!ShaderGraphReflectionHelper.TryDisconnectNodes(assetPath, fromNodeId, fromSlotId, toNodeId, toSlotId, out var edgeInfo, out var error))
+                return new { error };
+
+            return new
+            {
+                success = true,
+                assetPath,
+                edge = edgeInfo
+            };
+        }
+
+        [UnitySkill("shadergraph_set_node_defaults", "Set the default value of an unconnected input slot on a supported node",
+            Category = SkillCategory.ShaderGraph, Operation = SkillOperation.Modify,
+            Tags = new[] { "shadergraph", "node", "default", "slot", "value" },
+            Outputs = new[] { "assetPath", "node" },
+            TracksWorkflow = true,
+            MutatesAssets = true,
+            RequiresInput = new[] { "assetPath", "nodeId", "slotId", "value" },
+            RequiresPackages = new[] { "com.unity.shadergraph" })]
+        public static object ShaderGraphSetNodeDefaults(string assetPath, string nodeId, int slotId, object value)
+        {
+            if (Validate.Required(assetPath, "assetPath") is object assetErr) return assetErr;
+            if (Validate.Required(nodeId, "nodeId") is object nodeErr) return nodeErr;
+            if (Validate.SafePath(assetPath, "assetPath") is object pathErr) return pathErr;
+
+            SnapshotGraphAsset(assetPath);
+            if (!ShaderGraphReflectionHelper.TrySetNodeDefaults(assetPath, nodeId, slotId, value, out var nodeInfo, out var error))
+                return new { error };
+
+            return new
+            {
+                success = true,
+                assetPath,
+                node = nodeInfo
+            };
+        }
+
+        [UnitySkill("shadergraph_set_node_settings", "Set whitelisted settings on a supported Shader Graph node",
+            Category = SkillCategory.ShaderGraph, Operation = SkillOperation.Modify,
+            Tags = new[] { "shadergraph", "node", "settings", "edit" },
+            Outputs = new[] { "assetPath", "node" },
+            TracksWorkflow = true,
+            MutatesAssets = true,
+            RequiresInput = new[] { "assetPath", "nodeId", "settings" },
+            RequiresPackages = new[] { "com.unity.shadergraph" })]
+        public static object ShaderGraphSetNodeSettings(string assetPath, string nodeId, object settings)
+        {
+            if (Validate.Required(assetPath, "assetPath") is object assetErr) return assetErr;
+            if (Validate.Required(nodeId, "nodeId") is object nodeErr) return nodeErr;
+            if (Validate.SafePath(assetPath, "assetPath") is object pathErr) return pathErr;
+
+            SnapshotGraphAsset(assetPath);
+            if (!ShaderGraphReflectionHelper.TrySetNodeSettings(assetPath, nodeId, settings, out var nodeInfo, out var error))
+                return new { error };
+
+            return new
+            {
+                success = true,
+                assetPath,
+                node = nodeInfo
+            };
         }
 
         [UnitySkill("shadergraph_list_properties", "List exposed graph properties defined in a Shader Graph asset",
