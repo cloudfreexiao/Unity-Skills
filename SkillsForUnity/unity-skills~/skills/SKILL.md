@@ -12,7 +12,7 @@ Module docs. Start with [../SKILL.md](../SKILL.md) for mode switching and schema
 
 ## Modules
 
-> **Mode reminder**: `SA` modules are available in Semi-Auto by default. `FA` modules require Full-Auto mode.
+> **Mode reminder**: Mode labels guide AI routing only; the REST server still exposes all skills. `SA` modules are preferred in Semi-Auto by default. `FA` modules require clear Full-Auto intent before use.
 
 | Module | Mode | Description | Batch Support |
 |--------|:----:|-------------|---------------|
@@ -63,7 +63,7 @@ Module docs. Start with [../SKILL.md](../SKILL.md) for mode switching and schema
 | [history](./history/SKILL.md) | FA | Undo/redo history | No |
 | [scriptableobject](./scriptableobject/SKILL.md) | FA | ScriptableObject assets | No |
 | [netcode](./netcode/SKILL.md) | FA | Netcode for GameObjects setup, prefabs, lifecycle, host/server/client | Yes |
-| [yooasset](./yooasset/SKILL.md) | Both | YooAsset hot-update: build bundles, Collector CRUD, BuildReport asset/dependency analysis, PlayMode runtime validation, Reporter/Debugger/AssetArtScanner tools | Yes |
+| [yooasset](./yooasset/SKILL.md) | FA | YooAsset hot-update: build bundles, Collector CRUD, BuildReport asset/dependency analysis, PlayMode runtime validation, Reporter/Debugger/AssetArtScanner tools | Yes |
 | [dotween](./dotween/SKILL.md) | FA | DOTween Pro DOTweenAnimation editor-time configuration (add/batch/stagger/tune) | Yes |
 
 ## Advisory Design Modules

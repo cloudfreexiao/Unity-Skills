@@ -30,8 +30,8 @@
 
 ## 🚀 核心特性
 
-- 🛠️ **737 REST Skills 全能库**：包含 19 个 advisory 设计模块，支持 Batch 批处理，一次操控多个对象。
-- 🎛️ **双模式灵活切换**：Semi-Auto（代码优先）或 Full-Auto（直接操控），适配不同工作流。
+- 🛠️ **737 REST Skills 全能库**：包含 50 个功能源码模块和 19 个 advisory 设计模块，支持 Batch 批处理，一次操控多个对象。
+- 🎛️ **双模式灵活切换**：Semi-Auto（代码优先路由）或 Full-Auto（直接操控路由），适配不同工作流。
 - 🤖 **4 大 IDE 原生支持**：Claude Code / Antigravity / Gemini CLI / Codex，一键安装即用。
 - 🛡️ **事务原子性保障**：操作失败自动回滚，场景永不残留，确保流程安全。
 - 🌍 **多实例同时控制**：自动端口发现与全局注册表，支持同时操控多个 Unity 项目。
@@ -42,16 +42,18 @@
 
 ## 🎛️ 操作模式
 
-| 模式 | 默认 | 可用 Skills | 适用场景 |
+| 模式 | 默认 | AI 路由范围 | 适用场景 |
 |:-----|:----:|:-----------:|:---------|
-| **半自动 (Semi-Auto)** | ✅ | ~80 | AI 写 C# 代码 + 少量 Skills 辅助（脚本、场景感知、编辑器控制、资产管理、工作流、调试） |
-| **全自动 (Full-Auto)** | — | 全部 737 | AI 直接操控 Unity（创建物体、配置材质/灯光/UI、搭建场景） |
+| **半自动 (Semi-Auto)** | ✅ | 8 个 REST 分类（约 121 个入口）+ 19 个 advisory 模块 | AI 写 C# 代码 + 少量 Skills 辅助（脚本、场景感知、编辑器控制、资产管理、工作流、调试、控制台） |
+| **全自动 (Full-Auto)** | — | 全部 737 个 REST Skills | AI 直接操控 Unity（创建物体、配置材质/灯光/UI、搭建场景） |
 
 **切换方式**：
 - → Full-Auto：`"全自动模式"` / `"full auto"` / `"帮我搭建场景"` / `"直接操作 Unity"`
 - → Semi-Auto：`"半自动模式"` / `"semi-auto"` / `"代码优先"` — 每次新会话自动回到半自动
 
 > 19 个 advisory 设计模块（架构、性能、设计模式、可测试性、包级源码规则等）在两种模式下均可用，按需自动加载。
+>
+> 模式是 AI 路由规则，不是服务端权限系统。REST API 仍会通过 `/skills` 暴露全部 Skills；Agent 选择调用时应遵守模式策略。
 
 ---
 
@@ -166,47 +168,54 @@ https://github.com/Besty0728/Unity-Skills.git?path=/SkillsForUnity#v1.6.0
 
 | 分类 | 数量 | 核心功能 |
 | :--- | :---: | :--- |
-| **Cinemachine** | 23 | 2.x/3.x双版本自动安装/混合相机/ClearShot/TargetGroup/Spline |
-| **Workflow** | 23 | 持久化历史/任务快照/会话级撤销/回滚/书签 |
-| **Batch** | 21 | 统一批量查询/预览/执行/报告流程，支持异步作业与失败重试 |
-| **Material** | 21 | 材质属性批量修改/HDR/PBR/Emission/关键字/渲染队列 |
-| **GameObject** | 18 | 创建/查找/变换同步/批量操作/层级管理/重命名/复制 |
-| **Scene** | 10 | 多场景加载/卸载/激活/截图/上下文/依赖分析/报告导出 |
+| **YooAsset** | 40 | 热更新打包/Collector 完整 CRUD/BuildReport 资产与依赖分析/PlayMode 运行时验证/Reporter-Debugger-AssetArtScanner 工具 |
+| **Workflow** | 38 | 持久化历史/任务快照/会话级撤销/回滚/书签/批量查询预览执行作业 |
+| **Cinemachine** | 34 | 2.x/3.x双版本自动安装/混合相机/ClearShot/TargetGroup/Spline |
+| **Netcode** | 33 | Netcode for GameObjects 设置/预制体/生命周期/Host-Server-Client 工作流 |
 | **UI** | 26 | Canvas/Button/Text/InputField/Dropdown/ScrollView/Layout/对齐/Image 与 Selectable 工具 |
 | **UI Toolkit** | 25 | UXML/USS文件管理/UIDocument/PanelSettings全属性读写/模板生成/结构检查/批量创建 |
-| **Asset** | 11 | 资产导入/删除/移动/复制/搜索/文件夹/批量操作/刷新 |
+| **ShaderGraph** | 23 | Shader Graph 创建/检查/黑板编辑/受限节点编辑 |
+| **ProBuilder** | 22 | ProBuilder 形体创建/面边操作/UV工具/枢轴编辑/批量创建/网格合并 |
+| **XR** | 22 | XR rig 搭建/Interactor/Interactable/传送/连续移动/UI/触觉反馈/交互层配置 |
+| **Material** | 21 | 材质属性批量修改/HDR/PBR/Emission/关键字/渲染队列 |
+| **PostProcess** | 20 | SRP 后处理效果管理 |
+| **GameObject** | 18 | 创建/查找/变换同步/批量操作/层级管理/重命名/复制 |
+| **Perception** | 18 | 场景摘要/健康检查/栈检测/上下文导出/依赖分析/热点发现/差异对比/Tag-Layer统计/性能提示 |
+| **Volume** | 18 | VolumeProfile/Volume/VolumeComponent 创建与参数编辑 |
+| **Validation** | 16 | 项目验证/空文件夹清理/引用检测/网格碰撞/Shader错误 |
+| **URP** | 14 | URP 资产/Renderer/Renderer Feature 检查与编辑 |
+| **Decal** | 14 | URP Decal Projector 创建/检查/配置/删除工作流 |
+| **DOTween** | 12 | DOTweenAnimation 编辑器期配置与调参 |
 | **Editor** | 12 | 播放模式/选择/撤销重做/上下文获取/菜单执行 |
-| **Timeline** | 12 | 轨道创建/删除/Clip管理/播放控制/绑定/时长设置 |
 | **Physics** | 12 | 射线检测/球形投射/盒形投射/物理材质/层碰撞矩阵 |
-| **Audio** | 10 | 音频导入设置/AudioSource/AudioClip/AudioMixer/批量 |
-| **Texture** | 10 | 纹理导入设置/平台设置/Sprite/类型/尺寸查找/批量 |
-| **Model** | 10 | 模型导入设置/Mesh信息/材质映射/动画/骨骼/批量 |
 | **Script** | 12 | C#脚本创建/读取/替换/列表/信息/重命名/移动/分析 |
-| **Package** | 11 | 包管理/安装/移除/搜索/版本/依赖/Cinemachine/Splines |
+| **Timeline** | 12 | 轨道创建/删除/Clip管理/播放控制/绑定/时长设置 |
+| **Asset** | 11 | 资产导入/删除/移动/复制/搜索/文件夹/批量操作/刷新 |
 | **AssetImport** | 11 | 纹理/模型/音频/Sprite导入设置/标签管理/重导入 |
-| **Project** | 11 | 渲染管线/构建设置/包管理/Layer/Tag/PlayerSettings/质量 |
-| **Shader** | 11 | Shader创建/URP模板/编译检查/关键字/变体分析/全局关键字 |
 | **Camera** | 11 | Scene View控制/Game Camera创建/属性/截图/正交切换/列表 |
-| **Terrain** | 10 | 地形创建/高度图/Perlin噪声/平滑/平坦化/纹理绘制 |
-| **NavMesh** | 10 | 烘焙/路径计算/Agent/Obstacle/采样/区域代价 |
+| **Graphics** | 11 | GraphicsSettings/QualitySettings/SRP 资产操作 |
+| **Package** | 11 | 包管理/安装/移除/搜索/版本/依赖/Cinemachine/Splines |
+| **Prefab** | 11 | 创建/实例化/覆盖应用与恢复/批量实例化/变体/查找实例/资产属性设置 |
+| **Shader** | 11 | Shader创建/URP模板/编译检查/关键字/变体分析/全局关键字 |
+| **Test** | 11 | 测试运行/按名运行/分类/模板创建/汇总统计 |
+| **Animator** | 10 | 动画控制器/参数/状态机/过渡/分配/播放 |
+| **Audio** | 10 | 音频导入设置/AudioSource/AudioClip/AudioMixer/批量 |
 | **Cleaner** | 10 | 未使用资源/重复文件/空文件夹/丢失脚本修复/依赖树 |
-| **ScriptableObject** | 10 | 创建/读写/批量设置/删除/查找/JSON导入导出 |
+| **Component** | 10 | 添加/移除/属性配置/批量操作/复制/启用禁用 |
 | **Console** | 10 | 日志捕获/清理/导出/统计/暂停控制/折叠/播放清除 |
 | **Debug** | 10 | 错误日志/编译检查/堆栈/程序集/定义符号/内存信息 |
 | **Event** | 10 | UnityEvent监听器管理/批量添加/复制/状态控制/列举 |
-| **Smart** | 10 | 场景SQL查询/空间查询/自动布局/对齐地面/网格吸附/随机化/替换 |
-| **Test** | 11 | 测试运行/按名运行/分类/模板创建/汇总统计 |
-| **Prefab** | 11 | 创建/实例化/覆盖应用与恢复/批量实例化/变体/查找实例/资产属性设置 |
-| **Component** | 10 | 添加/移除/属性配置/批量操作/复制/启用禁用 |
+| **Light** | 10 | 灯光创建/类型配置/强度颜色/批量开关/探针组/反射探针/光照贴图 |
+| **Model** | 10 | 模型导入设置/Mesh信息/材质映射/动画/骨骼/批量 |
+| **NavMesh** | 10 | 烘焙/路径计算/Agent/Obstacle/采样/区域代价 |
 | **Optimization** | 10 | 纹理压缩/网格压缩/音频压缩/场景分析/静态标记/LOD/重复材质/过度绘制 |
 | **Profiler** | 10 | FPS/内存/纹理/网格/材质/音频/渲染统计/对象计数/AssetBundle |
-| **Light** | 10 | 灯光创建/类型配置/强度颜色/批量开关/探针组/反射探针/光照贴图 |
-| **Validation** | 10 | 项目验证/空文件夹清理/引用检测/网格碰撞/Shader错误 |
-| **Animator** | 10 | 动画控制器/参数/状态机/过渡/分配/播放 |
-| **Perception** | 18 | 场景摘要/健康检查/栈检测/上下文导出/依赖分析/热点发现/差异对比/Tag-Layer统计/性能提示 |
-| **ProBuilder** | 22 | ProBuilder 形体创建/面边操作/UV工具/枢轴编辑/批量创建/网格合并 |
-| **XR** | 22 | XR rig 搭建/Interactor/Interactable/传送/连续移动/UI/触觉反馈/交互层配置 |
-| **YooAsset** | 40 | 热更新打包/Collector 完整 CRUD/BuildReport 资产与依赖分析/PlayMode 运行时验证/Reporter-Debugger-AssetArtScanner 工具 |
+| **Scene** | 10 | 多场景加载/卸载/激活/截图/上下文/依赖分析/报告导出 |
+| **ScriptableObject** | 10 | 创建/读写/批量设置/删除/查找/JSON导入导出 |
+| **Smart** | 10 | 场景SQL查询/空间查询/自动布局/对齐地面/网格吸附/随机化/替换 |
+| **Terrain** | 10 | 地形创建/高度图/Perlin噪声/平滑/平坦化/纹理绘制 |
+| **Texture** | 10 | 纹理导入设置/平台设置/Sprite/类型/尺寸查找/批量 |
+| **Project** | 9 | 渲染管线/构建设置/包管理/Layer/Tag/PlayerSettings/质量 |
 | **Sample** | 8 | 基础示例：创建/删除/变换/场景信息 |
 
 > ⚠️ 大部分模块支持 `*_batch` 批量操作，操作多个物体时应优先使用批量 Skills 以提升性能。
@@ -227,7 +236,7 @@ https://github.com/Besty0728/Unity-Skills.git?path=/SkillsForUnity#v1.6.0
 │   │   ├── SKILL.md                # 主 Skill 定义 (AI 读取)
 │   │   ├── scripts/
 │   │   │   └── unity_skills.py     # Python 客户端库
-│   │   ├── skills/                 # 按模块分类的 Skill 文档 + 19 个 advisory 模块
+│   │   ├── skills/                 # 68 个模块文档（49 个 REST/模块文档 + 19 个 advisory 文档）
 │   │   └── references/             # Unity 开发参考文档
 │   └── Editor/Skills/              # 核心 Skill 逻辑 (50 个 *Skills.cs, 共 737 Skills)
 │       ├── SkillsHttpServer.cs     # HTTP 服务器核心 (Producer-Consumer)

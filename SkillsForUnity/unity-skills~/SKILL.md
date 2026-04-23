@@ -16,17 +16,19 @@ For exact skill names, parameters, defaults, and returns, query schema first:
 
 Use module `SKILL.md` files for routing guidance, guardrails, and minimal examples, not as the canonical source of exact signatures.
 
-Current snapshot: `737` REST skills, `50` functional modules, `19` advisory modules, Unity `2022.3+`, default timeout `15 minutes`.
+Current snapshot: `737` REST skills, `50` functional source modules, `68` module documentation directories (`49` REST/module docs + `19` advisory docs), Unity `2022.3+`, default timeout `15 minutes`.
 
 Python helper: `unity-skills/scripts/unity_skills.py`
 
 ## Operating Mode
 
-> **Default: SEMI-AUTO**. Only `script`, `perception`, `scene`, `editor`, `asset`, `workflow`, `debug`, `console`, and advisory modules are active. Object creation/configuration modules stay off until the user clearly requests direct Unity manipulation.
+Operating modes are an **AI routing policy**, not a server-side permission gate. The REST server still exposes all `737` skills through `/skills` and `/skills/schema`; the mode rules control which modules the agent should choose by default.
+
+> **Default: SEMI-AUTO**. Prefer only `script`, `perception`, `scene`, `editor`, `asset`, `workflow`, `debug`, `console`, and advisory modules. Hold back object creation/configuration modules until the user clearly requests direct Unity manipulation.
 
 ### Switch to Full-Auto
 
-Activate all Full-Auto skills when user explicitly says:
+Use Full-Auto routing when user explicitly says:
 - "全自动模式" / "full auto" / "full-auto mode"
 - "自动开发" / "自动化构建" / "auto build"
 - "帮我搭建场景" / "build the scene for me"
@@ -38,7 +40,9 @@ Activate all Full-Auto skills when user explicitly says:
 - "半自动模式" / "semi-auto" / "代码优先" / "code-first"
 - Session start always defaults to Semi-Auto
 
-### Semi-Auto Active Categories
+### Semi-Auto Routing Scope
+
+The current Semi-Auto REST scope is about `121` REST entries across these categories, plus `19` advisory modules. Treat the category list as the routing rule; use schema queries for exact callable counts and signatures.
 
 | Category | Modules | Representative Skills |
 |----------|---------|----------------------|
@@ -47,7 +51,7 @@ Activate all Full-Auto skills when user explicitly says:
 | Scene Mgmt | scene | scene_save, scene_load, scene_context, scene_find_objects |
 | Editor | editor | editor_get_context, editor_undo, editor_redo |
 | Asset Basic | asset | asset_refresh, asset_find, asset_get_info |
-| Workflow | workflow | workflow_task_start/end, workflow_undo_task |
+| Workflow | workflow | workflow_task_start/end, workflow_undo_task; use workflow/batch helpers for planning, preview, jobs, and rollback, not free-form scene construction |
 | Debug | debug, console | debug_check_compilation, console_get_logs |
 | Advisory | 19 modules | Design-only guidance modules (no REST skills) |
 
