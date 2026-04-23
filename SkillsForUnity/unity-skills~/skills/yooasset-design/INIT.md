@@ -21,6 +21,10 @@ package.LoadAssetAsync<T>(location)        // per-asset; release handle when don
 
 Source: `Runtime/ResourcePackage/ResourcePackage.cs:1157-1170`.
 
+`YooAssets.Initialize()` is idempotent in source: if the static system is already initialized, YooAsset logs a warning and returns. Still treat it as a process-level singleton and guard boot code with `if (!YooAssets.Initialized) YooAssets.Initialize();` so ownership of the driver GameObject stays explicit.
+
+Source: `Runtime/YooAssets.cs:38-64`.
+
 ## Shutdown order (reverse of startup)
 
 ```
@@ -101,7 +105,7 @@ public DestroyOperation DestroyAsync();                                    // :2
 
 ### The driver GameObject
 
-`YooAssets.Initialize` creates exactly one GameObject named `[YooAssets]` with a `YooAssetsDriver` component, then marks it `DontDestroyOnLoad`. The driver's `Update()` pumps `OperationSystem.Update()`, which in turn advances every registered operation. If you destroy the driver manually, every async operation stalls forever.
+`YooAssets.Initialize` creates one GameObject named `[YooAssets]` with a `YooAssetsDriver` component, then marks it `DontDestroyOnLoad`. Repeated `Initialize()` calls do not create another driver; they warn and return. The driver's `Update()` pumps `OperationSystem.Update()`, which in turn advances every registered operation. If you destroy the driver manually, every async operation stalls forever.
 
 Source: `Runtime/YooAssets.cs:50-63, 92-98`.
 
@@ -228,7 +232,7 @@ public class YooAssetBoot : MonoBehaviour
 
     IEnumerator Start()
     {
-        // 1. Initialize the static system exactly once per process
+        // 1. Initialize the static system once per process; repeated calls only warn and return
         if (!YooAssets.Initialized)
             YooAssets.Initialize();
 

@@ -11,7 +11,7 @@ A separate `## Legacy API migration` section at the bottom lists pre-2.3.18 call
 ### ❌ P1. Calling `CreatePackage` / `InitializeAsync` before `YooAssets.Initialize()`
 - Symptom: `Exception: YooAssets not initialize !`
 - Source: `Runtime/YooAssets.cs:223-229` — every public method guards with `CheckException`
-- ✅ Fix: call `YooAssets.Initialize()` once at process start; gate all later calls with `if (!YooAssets.Initialized) YooAssets.Initialize();`
+- ✅ Fix: call `YooAssets.Initialize()` at process start and gate boot code with `if (!YooAssets.Initialized) YooAssets.Initialize();`. A repeated `Initialize()` call only warns and returns, but relying on that hides ownership of the driver object.
 
 ### ❌ P2. Calling `CreatePackage` twice with the same name
 - Symptom: `Exception: Package DefaultPackage already existed !`
@@ -43,7 +43,7 @@ A separate `## Legacy API migration` section at the bottom lists pre-2.3.18 call
 ## PlayMode mismatches
 
 ### ❌ P7. Mismatched `InitializeParameters` subclass for the intended `EPlayMode`
-- Symptom: `InitializeAsync` dispatches to the wrong branch or throws `NotImplementedException`
+- Symptom: `InitializeAsync` infers a different play mode than you intended; an unknown custom subclass throws `NotImplementedException`
 - Source: `Runtime/ResourcePackage/ResourcePackage.cs:107-135, 170-181`
 - ✅ Fix: the five modes map 1:1 — `EditorSimulateMode ↔ EditorSimulateModeParameters`, `OfflinePlayMode ↔ OfflinePlayModeParameters`, `HostPlayMode ↔ HostPlayModeParameters`, `WebPlayMode ↔ WebPlayModeParameters`, `CustomPlayMode ↔ CustomPlayModeParameters`
 
@@ -91,12 +91,12 @@ A separate `## Legacy API migration` section at the bottom lists pre-2.3.18 call
 ## Loading type mistakes
 
 ### ❌ P15. `LoadAssetSync<T>()` with `T : UnityEngine.Behaviour`
-- Symptom: `Exception: Load asset type is invalid : ...`
+- Symptom: in DEBUG, `Exception: Load asset type is invalid : ...`; in non-DEBUG builds the guard is compiled out, so treat this as a design-time rule
 - Source: `Runtime/ResourcePackage/ResourcePackage.cs:1178-1181`
 - ✅ Fix: load the `GameObject` prefab, then `GetComponent<T>()`
 
 ### ❌ P16. Loading a plain C# type
-- Symptom: `Exception: Load asset type is invalid : ...`
+- Symptom: in DEBUG, `Exception: Load asset type is invalid : ...`; in non-DEBUG builds the guard is compiled out, so do not rely on runtime validation
 - Source: `Runtime/ResourcePackage/ResourcePackage.cs:1183-1186`
 - ✅ Fix: wrap your data in a `ScriptableObject` or load raw bytes via `LoadRawFileAsync`
 

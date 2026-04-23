@@ -107,7 +107,7 @@ public InitializationOperation InitializeAsync(InitializeParameters parameters) 
 }
 ```
 
-The `_playMode` field is chosen by runtime-type-checking `parameters` in `CheckInitializeParameters` (`:170-181`). If `parameters` is not one of the five recognized subclasses, that branch throws `NotImplementedException`.
+The `_playMode` field is chosen by runtime-type-checking `parameters` in `CheckInitializeParameters` (`:170-181`). There is no separate `EPlayMode` argument to cross-check against the subclass. If `parameters` is not one of the five recognized subclasses, that branch throws `NotImplementedException`; if it is a recognized subclass but not the topology you intended, initialization follows that subclass and later operations fail according to the file systems you actually wired.
 
 ## Platform guards
 
@@ -222,11 +222,11 @@ var op = package.InitializeAsync(p);
 
 ## ❌ Anti-patterns vs ✅ Correct patterns
 
-### 1. Wrong parameter subclass for the intended mode
+### 1. Wrong parameter subclass for the intended topology
 
 ```csharp
 // ❌ WRONG — CheckInitializeParameters sees OfflinePlayModeParameters and sets _playMode = OfflinePlayMode;
-//            later code expects BuildinFileSystemParameters, not a host setup
+//            later code follows offline semantics, not a host/cache setup
 var p = new OfflinePlayModeParameters {
     BuildinFileSystemParameters = FileSystemParameters.CreateDefaultCacheFileSystemParameters(remoteServices)
 };
