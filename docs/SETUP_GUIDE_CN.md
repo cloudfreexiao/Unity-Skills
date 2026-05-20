@@ -72,7 +72,7 @@ scripts/agent_config.json   # Agent 配置
 references/                 # Unity 开发参考文档
 ```
 
-> **Codex 说明**：推荐使用全局安装。项目级安装需要在 `AGENTS.md` 中声明才能识别。
+> **Codex 说明**：Antigravity 和 Codex 工作区共享 `.agents/skills/`，装一次即两边可用。Codex 自动扫描发现 skills，无需在 `AGENTS.md` 中声明。
 
 ### 手动安装
 
@@ -80,13 +80,12 @@ references/                 # Unity 开发参考文档
 
 **常见工具路径：**
 
-| 工具 | Skills 目录 |
-|------|------------|
-| Claude Code | `~/.claude/skills/` |
-| Antigravity | `~/.agent/skills/` |
-| Gemini CLI | `~/.gemini/skills/` |
-| Codex | `~/.codex/skills/`（全局） |
-| Cursor | `~/.cursor/skills/` |
+| 工具 | 工作区 | 全局 |
+|------|--------|------|
+| Claude Code | `.claude/skills/` | `~/.claude/skills/` |
+| Antigravity | `.agents/skills/` | `~/.gemini/antigravity/skills/` |
+| Codex | `.agents/skills/`（与 Antigravity 共享） | `~/.agents/skills/` |
+| Cursor | `.cursor/skills/` | `~/.cursor/skills/` |
 
 ### 支持的 AI 工具
 
@@ -94,10 +93,9 @@ references/                 # Unity 开发参考文档
 
 | 工具 | 状态 | 特色 |
 |------|:----:|------|
-| **Antigravity** | ✅ | 原生 `/unity-skills` 斜杠命令 |
+| **Antigravity** | ✅ | 开放 Agent Skills 标准；工作区与 Codex 共享 `.agents/skills/` |
 | **Claude Code** | ✅ | 智能 Skill 意图识别 |
-| **Gemini CLI** | ✅ | `experimental.skills` 支持 |
-| **Codex** | ✅ | `$skill` 显式调用 + 隐式意图识别 |
+| **Codex** | ✅ | `$skill` 显式调用 + 隐式意图识别；自动扫描 `.agents/skills/` |
 
 > ⚠️ **通用兼容性**：UnitySkills 遵循开放的 Skill 标准。**任何能读取 markdown 文件并发送 HTTP 请求的 AI 工具**都可以使用 UnitySkills — 不限于上述列表。只需将 `unity-skills~/` 目录内容复制到你的工具的 skill 或 prompt 位置，确保工具能访问 `http://localhost:8090` 即可。
 

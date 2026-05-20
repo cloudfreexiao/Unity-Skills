@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" xsi="http://www.w3.org/2001/XMLSchema-instance" engine="UnityEngine.UIElements" editor="UnityEditor.UIElements" noNamespaceSchemaLocation="../../../../../../../UIElementsSchema/UIElementsSchema.xsd">
+    <ui:VisualElement style="flex-grow: 1;">
+        <!-- 头部工具栏 -->
+        <ui:VisualElement class="horizontal-layout divider-bottom" style="margin-bottom: 4px; padding-bottom: 4px;">
+            <ui:Label name="skills-title" class="section-title" />
+            <ui:VisualElement class="flex-grow" />
+            <ui:Button name="refresh-btn" style="width: 60px; margin: 0 4px 0 0;" />
+            <ui:Button name="validate-btn" style="width: 70px; margin: 0;" />
+        </ui:VisualElement>
+
+        <!-- 总数统计 -->
+        <ui:Label name="total-skills-label" class="muted-label" style="margin-bottom: 8px;" />
+
+        <!-- 技能折叠分组滚动区域 -->
+        <ui:ScrollView class="scroll-view" style="flex-grow: 1;">
+            <ui:VisualElement name="skills-container" />
+        </ui:ScrollView>
+    </ui:VisualElement>
+</ui:UXML>

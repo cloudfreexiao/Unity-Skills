@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" xsi="http://www.w3.org/2001/XMLSchema-instance" engine="UnityEngine.UIElements" editor="UnityEditor.UIElements" noNamespaceSchemaLocation="../../../../../../../UIElementsSchema/UIElementsSchema.xsd">
+    <ui:VisualElement class="root" style="flex-grow: 1; flex-direction: column;">
+
+        <!-- Top tab bar — each tab wraps a Button + an independent underline VisualElement.
+             Using a separate underline element instead of the Button's own border-bottom
+             avoids Unity's built-in Button :hover/:focus styles overriding it, which
+             caused the "need to mouse out and back in" bug. -->
+        <ui:VisualElement name="tab-bar" class="tab-bar" style="flex-direction: row; flex-shrink: 0;">
+            <ui:VisualElement class="tab-wrap" style="flex-grow: 1; flex-direction: column;">
+                <ui:Button name="tab-btn-0" text="Server" class="tab-btn" />
+                <ui:VisualElement name="tab-underline-0" class="tab-underline" />
+            </ui:VisualElement>
+            <ui:VisualElement class="tab-wrap" style="flex-grow: 1; flex-direction: column;">
+                <ui:Button name="tab-btn-1" text="Skills" class="tab-btn" />
+                <ui:VisualElement name="tab-underline-1" class="tab-underline" />
+            </ui:VisualElement>
+            <ui:VisualElement class="tab-wrap" style="flex-grow: 1; flex-direction: column;">
+                <ui:Button name="tab-btn-2" text="AI Config" class="tab-btn" />
+                <ui:VisualElement name="tab-underline-2" class="tab-underline" />
+            </ui:VisualElement>
+            <ui:VisualElement class="tab-wrap" style="flex-grow: 1; flex-direction: column;">
+                <ui:Button name="tab-btn-3" text="History" class="tab-btn" />
+                <ui:VisualElement name="tab-underline-3" class="tab-underline" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+        <!-- Middle tab content area — single child visible at a time (toggled by SwitchTab) -->
+        <ui:VisualElement name="tab-content" class="tab-content" style="flex-grow: 1; flex-direction: column;">
+            <ui:VisualElement name="tab-content-0" style="flex-grow: 1;" />
+            <ui:VisualElement name="tab-content-1" style="flex-grow: 1;" />
+            <ui:VisualElement name="tab-content-2" style="flex-grow: 1;" />
+            <ui:VisualElement name="tab-content-3" style="flex-grow: 1;" />
+        </ui:VisualElement>
+
+        <!-- Bottom footer — spacer + lang toggle (right-aligned without justify-content for clarity) -->
+        <ui:VisualElement name="footer" class="footer" style="flex-direction: row; flex-shrink: 0; align-items: center;">
+            <ui:VisualElement style="flex-grow: 1;" />
+            <ui:Button name="lang-toggle" text="EN / 中文" class="lang-toggle" />
+        </ui:VisualElement>
+
+    </ui:VisualElement>
+</ui:UXML>

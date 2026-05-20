@@ -72,7 +72,7 @@ scripts/agent_config.json   # Agent configuration
 references/                 # Unity development references
 ```
 
-> **Codex Note**: Global installation is recommended. For project-level installation, declare the skill in your `AGENTS.md`.
+> **Codex Note**: Antigravity and Codex share `.agents/skills/` in workspace mode — install once for either makes it available to both. Codex auto-discovers skills; no `AGENTS.md` declaration needed.
 
 ### Manual Installation
 
@@ -80,13 +80,12 @@ If one-click installation is not available for your tool, manually copy the cont
 
 **Common tool paths:**
 
-| Tool | Skill Directory |
-|------|----------------|
-| Claude Code | `~/.claude/skills/` |
-| Antigravity | `~/.agent/skills/` |
-| Gemini CLI | `~/.gemini/skills/` |
-| Codex | `~/.codex/skills/` (global) |
-| Cursor | `~/.cursor/skills/` |
+| Tool | Workspace | Global |
+|------|-----------|--------|
+| Claude Code | `.claude/skills/` | `~/.claude/skills/` |
+| Antigravity | `.agents/skills/` | `~/.gemini/antigravity/skills/` |
+| Codex | `.agents/skills/` (shared with Antigravity) | `~/.agents/skills/` |
+| Cursor | `.cursor/skills/` | `~/.cursor/skills/` |
 
 ### Supported AI Tools
 
@@ -94,10 +93,9 @@ The following tools have been officially tested:
 
 | Tool | Status | Highlights |
 |------|:------:|------------|
-| **Antigravity** | ✅ | Native `/unity-skills` slash command |
+| **Antigravity** | ✅ | Open Agent Skills standard; shares `.agents/skills/` with Codex in workspace mode |
 | **Claude Code** | ✅ | Intelligent skill intent recognition |
-| **Gemini CLI** | ✅ | `experimental.skills` support |
-| **Codex** | ✅ | `$skill` explicit call + implicit intent |
+| **Codex** | ✅ | `$skill` explicit call + implicit intent; auto-discovers `.agents/skills/` |
 
 > ⚠️ **Universal Compatibility**: UnitySkills follows an open skill standard. **Any AI tool that can read markdown files and make HTTP requests** can use UnitySkills — not limited to the tools listed above. Simply copy the `unity-skills~/` directory contents to your tool's skill or prompt location and ensure the tool can reach `http://localhost:8090`.
 

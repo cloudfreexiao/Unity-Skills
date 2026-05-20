@@ -3,33 +3,27 @@ using UnityEditor;
 using System;
 using System.IO;
 using System.Text;
-using System.Linq;
-using System.Collections.Generic;
 
 namespace UnitySkills
 {
     /// <summary>
-    /// One-click skill installer for mainstream AI IDEs: Claude Code, Antigravity, Gemini CLI, Codex, and Cursor.
+    /// One-click skill installer for mainstream AI IDEs: Claude Code, Antigravity, Codex, and Cursor.
     /// </summary>
     public static class SkillInstaller
     {
         // Claude Code paths - Claude supports any folder name
         public static string ClaudeProjectPath => Path.Combine(Application.dataPath, "..", ".claude", "skills", "unity-skills");
         public static string ClaudeGlobalPath => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".claude", "skills", "unity-skills");
-        
-        // Antigravity paths
-        public static string AntigravityProjectPath => Path.Combine(Application.dataPath, "..", ".agent", "skills", "unity-skills");
-        public static string AntigravityGlobalPath => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".gemini", "antigravity", "skills", "unity-skills");
-        public static string AntigravityWorkflowProjectPath => Path.Combine(Application.dataPath, "..", ".agent", "workflows");
-        public static string AntigravityWorkflowGlobalPath => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".gemini", "antigravity", "workflows");
 
-        // Gemini CLI paths - folder name should match SKILL.md name field for proper recognition
-        public static string GeminiProjectPath => Path.Combine(Application.dataPath, "..", ".gemini", "skills", "unity-skills");
-        public static string GeminiGlobalPath => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".gemini", "skills", "unity-skills");
+        // Antigravity paths - https://antigravity.google/docs/skills
+        // Workspace shared with Codex via .agents/skills (open Agent Skills standard)
+        public static string AntigravityProjectPath => Path.Combine(Application.dataPath, "..", ".agents", "skills", "unity-skills");
+        public static string AntigravityGlobalPath => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".gemini", "antigravity", "skills", "unity-skills");
 
         // Codex paths - https://developers.openai.com/codex/skills
-        public static string CodexProjectPath => Path.Combine(Application.dataPath, "..", ".codex", "skills", "unity-skills");
-        public static string CodexGlobalPath => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".codex", "skills", "unity-skills");
+        // Workspace shared with Antigravity via .agents/skills (open Agent Skills standard)
+        public static string CodexProjectPath => Path.Combine(Application.dataPath, "..", ".agents", "skills", "unity-skills");
+        public static string CodexGlobalPath => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".agents", "skills", "unity-skills");
 
         // Cursor paths - https://cursor.com/docs/context/skills
         public static string CursorProjectPath => Path.Combine(Application.dataPath, "..", ".cursor", "skills", "unity-skills");
@@ -39,8 +33,6 @@ namespace UnitySkills
         public static bool IsClaudeGlobalInstalled => Directory.Exists(ClaudeGlobalPath) && File.Exists(Path.Combine(ClaudeGlobalPath, "SKILL.md"));
         public static bool IsAntigravityProjectInstalled => Directory.Exists(AntigravityProjectPath) && File.Exists(Path.Combine(AntigravityProjectPath, "SKILL.md"));
         public static bool IsAntigravityGlobalInstalled => Directory.Exists(AntigravityGlobalPath) && File.Exists(Path.Combine(AntigravityGlobalPath, "SKILL.md"));
-        public static bool IsGeminiProjectInstalled => Directory.Exists(GeminiProjectPath) && File.Exists(Path.Combine(GeminiProjectPath, "SKILL.md"));
-        public static bool IsGeminiGlobalInstalled => Directory.Exists(GeminiGlobalPath) && File.Exists(Path.Combine(GeminiGlobalPath, "SKILL.md"));
         public static bool IsCodexProjectInstalled => Directory.Exists(CodexProjectPath) && File.Exists(Path.Combine(CodexProjectPath, "SKILL.md"));
         public static bool IsCodexGlobalInstalled => Directory.Exists(CodexGlobalPath) && File.Exists(Path.Combine(CodexGlobalPath, "SKILL.md"));
         public static bool IsCursorProjectInstalled => Directory.Exists(CursorProjectPath) && File.Exists(Path.Combine(CursorProjectPath, "SKILL.md"));
@@ -64,19 +56,7 @@ namespace UnitySkills
             try
             {
                 var targetPath = global ? AntigravityGlobalPath : AntigravityProjectPath;
-                var res = InstallSkill(targetPath, "Antigravity", "Antigravity");
-                if (!res.success) return res;
-
-                // Install Workflow for Antigravity slash commands
-                var workflowPath = global ? AntigravityWorkflowGlobalPath : AntigravityWorkflowProjectPath;
-                if (!Directory.Exists(workflowPath))
-                    Directory.CreateDirectory(workflowPath);
-                
-                var workflowMd = GenerateAntigravityWorkflow();
-                var utf8NoBom = SkillsCommon.Utf8NoBom;
-                File.WriteAllText(Path.Combine(workflowPath, "unity-skills.md"), workflowMd.Replace("\r\n", "\n"), utf8NoBom);
-                
-                return (true, targetPath);
+                return InstallSkill(targetPath, "Antigravity", "Antigravity");
             }
             catch (Exception ex)
             {
@@ -102,41 +82,7 @@ namespace UnitySkills
             try
             {
                 var targetPath = global ? AntigravityGlobalPath : AntigravityProjectPath;
-                var res = UninstallSkill(targetPath, "Antigravity");
-
-                // Uninstall Workflow
-                var workflowPath = global ? AntigravityWorkflowGlobalPath : AntigravityWorkflowProjectPath;
-                var workflowFile = Path.Combine(workflowPath, "unity-skills.md");
-                if (File.Exists(workflowFile))
-                    File.Delete(workflowFile);
-
-                return res;
-            }
-            catch (Exception ex)
-            {
-                return (false, ex.Message);
-            }
-        }
-
-        public static (bool success, string message) InstallGemini(bool global)
-        {
-            try
-            {
-                var targetPath = global ? GeminiGlobalPath : GeminiProjectPath;
-                return InstallSkill(targetPath, "Gemini CLI", "Gemini");
-            }
-            catch (Exception ex)
-            {
-                return (false, ex.Message);
-            }
-        }
-
-        public static (bool success, string message) UninstallGemini(bool global)
-        {
-            try
-            {
-                var targetPath = global ? GeminiGlobalPath : GeminiProjectPath;
-                return UninstallSkill(targetPath, "Gemini CLI");
+                return UninstallSkill(targetPath, "Antigravity");
             }
             catch (Exception ex)
             {
@@ -149,16 +95,7 @@ namespace UnitySkills
             try
             {
                 var targetPath = global ? CodexGlobalPath : CodexProjectPath;
-                var res = InstallSkill(targetPath, "Codex", "Codex");
-                if (!res.success) return res;
-
-                // For project-level install, also update AGENTS.md
-                if (!global)
-                {
-                    UpdateAgentsMd();
-                }
-                
-                return res;
+                return InstallSkill(targetPath, "Codex", "Codex");
             }
             catch (Exception ex)
             {
@@ -171,15 +108,7 @@ namespace UnitySkills
             try
             {
                 var targetPath = global ? CodexGlobalPath : CodexProjectPath;
-                var res = UninstallSkill(targetPath, "Codex");
-
-                // For project-level uninstall, also remove from AGENTS.md
-                if (!global)
-                {
-                    RemoveFromAgentsMd();
-                }
-
-                return res;
+                return UninstallSkill(targetPath, "Codex");
             }
             catch (Exception ex)
             {
@@ -228,64 +157,6 @@ namespace UnitySkills
             }
         }
 
-        private static string AgentsMdPath => Path.Combine(Application.dataPath, "..", "AGENTS.md");
-        private const string UnitySkillsEntry = "- unity-skills: Unity Editor automation via REST API";
-
-        private static void UpdateAgentsMd()
-        {
-            var agentsPath = AgentsMdPath;
-            var utf8NoBom = SkillsCommon.Utf8NoBom;
-
-            if (File.Exists(agentsPath))
-            {
-                // File exists, check if unity-skills is already declared
-                var content = File.ReadAllText(agentsPath, Encoding.UTF8);
-                if (!content.Contains("unity-skills"))
-                {
-                    // Append unity-skills entry
-                    var appendContent = "\n\n## UnitySkills\n" + UnitySkillsEntry + "\n";
-                    File.AppendAllText(agentsPath, appendContent.Replace("\r\n", "\n"), utf8NoBom);
-                    SkillsLogger.Log("Added unity-skills to existing AGENTS.md");
-                }
-                else
-                {
-                    SkillsLogger.LogVerbose("unity-skills already declared in AGENTS.md");
-                }
-            }
-            else
-            {
-                // Create new AGENTS.md
-                var newContent = @"# AGENTS.md
-
-This file declares available skills for AI agents like Codex.
-
-## UnitySkills
-" + UnitySkillsEntry + "\n";
-                File.WriteAllText(agentsPath, newContent.Replace("\r\n", "\n"), utf8NoBom);
-                SkillsLogger.Log("Created AGENTS.md with unity-skills declaration");
-            }
-        }
-
-        private static void RemoveFromAgentsMd()
-        {
-            var agentsPath = AgentsMdPath;
-            if (!File.Exists(agentsPath)) return;
-
-            var content = File.ReadAllText(agentsPath, Encoding.UTF8);
-            if (content.Contains("unity-skills"))
-            {
-                // Remove unity-skills related lines
-                var lines = content.Split('\n').ToList();
-                lines.RemoveAll(l => l.Contains("unity-skills") || l.Trim() == "## UnitySkills");
-                
-                // Clean up empty consecutive lines
-                var cleanedContent = string.Join("\n", lines).Trim() + "\n";
-                var utf8NoBom = SkillsCommon.Utf8NoBom;
-                File.WriteAllText(agentsPath, cleanedContent.Replace("\r\n", "\n"), utf8NoBom);
-                SkillsLogger.Log("Removed unity-skills from AGENTS.md");
-            }
-        }
-
         private static (bool success, string message) UninstallSkill(string targetPath, string name)
         {
             if (!Directory.Exists(targetPath))
@@ -301,8 +172,7 @@ This file declares available skills for AI agents like Codex.
             if (!Directory.Exists(targetPath))
                 Directory.CreateDirectory(targetPath);
 
-            // CRITICAL: Use UTF-8 WITHOUT BOM for Gemini CLI compatibility
-            // Gemini CLI cannot parse YAML frontmatter if BOM (EF BB BF) is present at start of file
+            // Use UTF-8 WITHOUT BOM: some agents reject YAML frontmatter when a BOM (EF BB BF) precedes the leading `---`.
             var utf8NoBom = SkillsCommon.Utf8NoBom;
             CopyTemplateDirectory(GetSkillTemplateRoot(), targetPath, utf8NoBom);
 
@@ -415,54 +285,6 @@ This file declares available skills for AI agents like Codex.
 
             var content = File.ReadAllText(sourceFile, Encoding.UTF8).Replace("\r\n", "\n");
             File.WriteAllText(destinationFile, content, encoding);
-        }
-
-        private static string GenerateAntigravityWorkflow()
-        {
-            var sb = new StringBuilder();
-            sb.AppendLine("---");
-            sb.AppendLine("description: Control Unity Editor via REST API. Create GameObjects, manage scenes, components, materials, and more. 100+ automation tools.");
-            sb.AppendLine("---");
-            sb.AppendLine();
-            sb.AppendLine("# unity-skills");
-            sb.AppendLine();
-            sb.AppendLine("AI-powered Unity Editor automation through REST API. This workflow enables intelligent control of Unity Editor including GameObject manipulation, scene management, asset handling, and much more.");
-            sb.AppendLine();
-            sb.AppendLine("## Available modules");
-            sb.AppendLine();
-            sb.AppendLine("| Module | Description |");
-            sb.AppendLine("|--------|-------------|");
-            sb.AppendLine("| **gameobject** | Create, modify, find GameObjects |");
-            sb.AppendLine("| **component** | Add, remove, configure components |");
-            sb.AppendLine("| **scene** | Scene loading, saving, management |");
-            sb.AppendLine("| **material** | Material creation, HDR emission, keywords |");
-            sb.AppendLine("| **light** | Lighting setup and configuration |");
-            sb.AppendLine("| **animator** | Animation controller management |");
-            sb.AppendLine("| **ui** | UI Canvas and element creation |");
-            sb.AppendLine("| **validation**| Project validation and checking |");
-            sb.AppendLine("| **prefab** | Prefab creation and instantiation |");
-            sb.AppendLine("| **asset** | Asset import, organize, search |");
-            sb.AppendLine("| **editor** | Editor state, play mode, selection |");
-            sb.AppendLine("| **console** | Log capture and debugging |");
-            sb.AppendLine("| **script** | C# script creation and search |");
-            sb.AppendLine("| **shader** | Shader creation and listing |");
-            sb.AppendLine("| **workflow** | Time-machine revert, history tracking, auto-save |");
-            sb.AppendLine();
-            sb.AppendLine("## How to Use");
-            sb.AppendLine();
-            sb.AppendLine("1. **Check Unity Connection**: Ensure Unity Editor is running with the `SkillsForUnity` plugin.");
-            sb.AppendLine("2. **Invoke Skills**: Use `unity_skills.py` (located in the skill's scripts directory) to call Unity functions.");
-            sb.AppendLine();
-            sb.AppendLine("### Example Prompt");
-            sb.AppendLine("`/unity-skills create a red cube at (0, 0, 0)`");
-            sb.AppendLine();
-            sb.AppendLine("## Best Practices");
-            sb.AppendLine();
-            sb.AppendLine("- **Save Progress**: Frequently call `scene_save` during automation.");
-            sb.AppendLine("- **Undo Support**: Operations are usually undoable in Unity.");
-            sb.AppendLine("- **Domain Reload**: Be aware that creating scripts triggers a domain reload.");
-            
-            return sb.ToString();
         }
     }
 }

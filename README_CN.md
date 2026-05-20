@@ -32,7 +32,7 @@
 
 - 🛠️ **714 REST Skills 全能库**：包含 51 个功能源码模块和 19 个 advisory 设计模块，支持 Batch 批处理，一次操控多个对象。
 - 🎛️ **双模式灵活切换**：Semi-Auto（代码优先路由）或 Full-Auto（直接操控路由），适配不同工作流。
-- 🤖 **4 大 IDE 原生支持**：Claude Code / Antigravity / Gemini CLI / Codex，一键安装即用。
+- 🤖 **4 大 IDE 原生支持**：Claude Code / Antigravity / Codex / Cursor，一键安装即用。
 - 🛡️ **事务原子性保障**：操作失败自动回滚，场景永不残留，确保流程安全。
 - 🌍 **多实例同时控制**：自动端口发现与全局注册表，支持同时操控多个 Unity 项目。
 - 🔗 **超长稳定连接**：请求超时可配（默认 15 分钟），Domain Reload 后自动恢复，脚本编译/资源重导入等短暂中断会提示重试。
@@ -63,10 +63,10 @@
 
 | AI 终端 | 支持状态 | 特色功能 |
 | :--- | :---: | :--- |
-| **Antigravity** | ✅ 支持 | 支持 `/unity-skills` 斜杠命令，原生集成工作流。 |
+| **Antigravity** | ✅ 支持 | 基于开放 Agent Skills 标准，工作区使用 `.agents/skills/`，全局使用 `~/.gemini/antigravity/skills/`。 |
 | **Claude Code** | ✅ 支持 | 智能识别 Skill 意图，支持复杂多步自动化。 |
-| **Gemini CLI** | ✅ 支持 | 实验性支持，适配最新 `experimental.skills` 规范。 |
-| **Codex** | ✅ 支持 | 支持 `$skill` 显式调用和隐式意图识别。 |
+| **Codex** | ✅ 支持 | 支持 `$skill` 显式调用和隐式意图识别。工作区与 Antigravity 共享 `.agents/skills/`。 |
+| **Cursor** | ✅ 支持 | 自动扫描 `.cursor/skills/` 和 `.agents/skills/`；支持 `/skill-name` 显式触发；可在 设置 → Rules 查看已加载技能。 |
 
 ---
 
@@ -105,7 +105,7 @@ https://github.com/Besty0728/Unity-Skills.git?path=/SkillsForUnity#v1.6.0
 
 ### 3. 一键配置 AI Skills
 1. 打开 `Window > UnitySkills > Skill Installer`。
-2. 选择对应的终端图标（Claude / Antigravity / Gemini / Codex）。
+2. 选择对应的终端图标（Claude / Antigravity / Codex / Cursor）。
 3. 点击 **"Install"** 即可完成环境配置，无需手动拷贝代码。
 
 > 安装器会复制包内的 `unity-skills~/` 模板目录到目标位置。
@@ -116,9 +116,8 @@ https://github.com/Besty0728/Unity-Skills.git?path=/SkillsForUnity#v1.6.0
 > - `references/`
 > - `scripts/unity_skills.py`
 > - `scripts/agent_config.json`（包含 Agent 标识）
-> - Antigravity 额外生成 `workflows/unity-skills.md`
 
-> **Codex 特别说明**：推荐使用**全局安装**。项目级安装需要在 `AGENTS.md` 中声明才能识别，全局安装后重启 Codex 即可。
+> **Codex 特别说明**：Antigravity 和 Codex 工作区都使用 `.agents/skills/` —— 装一次即两边可用。Codex 自动扫描 `.agents/skills/` 发现 skills，无需在 `AGENTS.md` 中声明。
 
 📘 需要更完整的安装与使用说明，请查看：[安装指南](docs/SETUP_GUIDE_CN.md) | [Setup Guide](docs/SETUP_GUIDE.md)
 
@@ -138,7 +137,7 @@ https://github.com/Besty0728/Unity-Skills.git?path=/SkillsForUnity#v1.6.0
    ```json
    {"agentId": "your-agent-name", "installedAt": "2026-02-11T00:00:00Z"}
    ```
-   将 `your-agent-name` 替换为你使用的 AI 工具名称（如 `claude-code`、`antigravity`、`gemini-cli`、`codex`）。
+   将 `your-agent-name` 替换为你使用的 AI 工具名称（如 `claude-code`、`antigravity`、`codex`、`cursor`）。
 5. **目录结构要求**：复制后需保持结构如下（示例）：
    - `unity-skills/SKILL.md`
    - `unity-skills/skills/`
@@ -152,9 +151,9 @@ https://github.com/Besty0728/Unity-Skills.git?path=/SkillsForUnity#v1.6.0
 以下为已验证的默认目录（若工具配置过自定义路径，请以自定义为准）：
 
 - Claude Code：`~/.claude/skills/`
-- Antigravity：`~/.agent/skills/`
-- Gemini CLI：`~/.gemini/skills/`
-- OpenAI Codex：`~/.codex/skills/`
+- Antigravity：`~/.gemini/antigravity/skills/`（全局）或 `.agents/skills/`（工作区）
+- OpenAI Codex：`~/.agents/skills/`（全局）或 `.agents/skills/`（工作区，与 Antigravity 共享）
+- Cursor：`~/.cursor/skills/`（全局）或 `.cursor/skills/`（工作区）；也会自动扫描 `.agents/skills/`
 
 #### 🧩 其他支持 Skills 的工具
 若你使用的是其他支持 Skills 的工具，请按照该工具文档指定的 Skills 根目录进行安装。只要满足**标准安装规范**（根目录包含 `SKILL.md` 并保持 `skills/`、`references/` 与 `scripts/` 结构），即可被正确识别。

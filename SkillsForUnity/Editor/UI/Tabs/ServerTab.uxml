@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" xsi="http://www.w3.org/2001/XMLSchema-instance" engine="UnityEngine.UIElements" editor="UnityEditor.UIElements" noNamespaceSchemaLocation="../../../../../../../UIElementsSchema/UIElementsSchema.xsd">
+    <ui:ScrollView class="scroll-view">
+        <!-- 运行状态卡 -->
+        <ui:VisualElement class="card horizontal-layout" style="align-items: center; padding: 12px;">
+            <ui:VisualElement name="status-dot" class="status-dot" />
+            <ui:Label name="status-label" class="bold-label" style="font-size: 13px;" />
+            <ui:VisualElement class="flex-grow" />
+            <ui:Button name="server-toggle-btn" style="width: 100px; height: 24px; -unity-font-style: bold; margin: 0;" />
+        </ui:VisualElement>
+
+        <!-- 连接信息卡 -->
+        <ui:VisualElement name="conn-card" class="card">
+            <ui:VisualElement class="card-header">
+                <ui:Label name="conn-title" class="section-title" />
+            </ui:VisualElement>
+            <ui:Label name="port-label" style="margin-bottom: 4px;" />
+            <ui:Label name="id-label" style="margin-bottom: 4px;" />
+            <ui:VisualElement class="horizontal-layout">
+                <ui:Label text="URL:" style="width: 35px; -unity-text-align: middle-left;" />
+                <ui:TextField name="url-field" readonly="true" class="flex-grow" style="margin: 0; padding: 2px;" />
+                <ui:Button name="url-copy-btn" style="width: 50px; margin: 0 0 0 4px; padding: 2px 4px;" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+        <!-- Live 统计卡 -->
+        <ui:VisualElement name="stats-card" class="card">
+            <ui:VisualElement class="card-header">
+                <ui:Label name="stats-title" class="section-title" />
+            </ui:VisualElement>
+            <ui:Label name="queue-label" style="margin-bottom: 4px;" />
+            <ui:VisualElement class="horizontal-layout">
+                <ui:Label name="processed-label" class="flex-grow" style="-unity-text-align: middle-left;" />
+                <ui:Button name="stats-reset-btn" style="width: 50px; margin: 0; padding: 2px 4px;" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+        <!-- 设置卡 -->
+        <ui:VisualElement class="card">
+            <ui:VisualElement class="card-header">
+                <ui:Label name="settings-title" class="section-title" />
+            </ui:VisualElement>
+
+            <!-- 自动重启 -->
+            <ui:Toggle name="autostart-toggle" style="margin-bottom: 2px;" />
+            <ui:Label name="autostart-hint" class="muted-label" style="margin-bottom: 8px; margin-left: 18px;" />
+
+            <!-- 端口 -->
+            <ui:VisualElement class="horizontal-layout" style="margin-bottom: 6px;">
+                <ui:Label name="port-select-label" style="width: 70px;" />
+                <ui:DropdownField name="port-dropdown" class="flex-grow" style="margin: 0;" />
+            </ui:VisualElement>
+
+            <!-- 超时 -->
+            <ui:VisualElement class="horizontal-layout" style="margin-bottom: 6px;">
+                <ui:Label name="timeout-label" style="width: 70px;" />
+                <ui:IntegerField name="timeout-field" style="width: 50px; margin: 0;" />
+                <ui:Label name="timeout-unit" style="margin-left: 6px;" />
+            </ui:VisualElement>
+
+            <!-- 保活间隔 -->
+            <ui:VisualElement class="horizontal-layout" style="margin-bottom: 2px;">
+                <ui:Label name="keepalive-label" style="width: 70px;" />
+                <ui:IntegerField name="keepalive-field" style="width: 50px; margin: 0;" />
+                <ui:Label name="keepalive-unit" style="margin-left: 6px;" />
+            </ui:VisualElement>
+            <ui:Label name="keepalive-hint" class="muted-label" style="margin-bottom: 8px; margin-left: 18px;" />
+
+            <!-- 日志级别 -->
+            <ui:VisualElement class="horizontal-layout" style="margin-bottom: 8px;">
+                <ui:Label name="loglevel-label" style="width: 70px;" />
+                <ui:DropdownField name="loglevel-dropdown" class="flex-grow" style="margin: 0;" />
+            </ui:VisualElement>
+
+            <!-- 高风险技能二次确认 -->
+            <ui:Toggle name="confirm-toggle" style="margin-bottom: 2px; -unity-font-style: bold;" />
+            <ui:Label name="confirm-hint" class="muted-label" style="margin-left: 18px;" />
+        </ui:VisualElement>
+
+        <!-- 测试技能卡 -->
+        <ui:VisualElement class="card">
+            <ui:VisualElement class="card-header">
+                <ui:Label name="test-title" class="section-title" />
+            </ui:VisualElement>
+            
+            <ui:TextField name="test-name-field" style="margin-bottom: 6px;" />
+            
+            <ui:Label name="test-params-label" style="margin-bottom: 2px;" />
+            <ui:TextField name="test-params-field" multiline="true" style="height: 60px; margin-bottom: 8px;" />
+            
+            <ui:Button name="test-exec-btn" class="btn-primary" style="height: 26px; margin: 0 0 8px 0;" />
+
+            <!-- 结果区域 -->
+            <ui:VisualElement name="test-result-container">
+                <ui:Label name="result-title" style="margin-bottom: 2px;" />
+                <ui:TextField name="test-result-field" multiline="true" readonly="true" style="height: 80px; margin: 0;" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+    </ui:ScrollView>
+</ui:UXML>

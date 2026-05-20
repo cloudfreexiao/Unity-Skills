@@ -1,0 +1,392 @@
+/* =====================================================================
+ * UnitySkills Global Theme stylesheet
+ *
+ * Layout principle: structural flex (direction / shrink / grow) is written
+ * INLINE in UXML as a safety net. USS only handles theming (colors, fonts,
+ * transitions, hover states). This avoids the entire UI collapsing if a
+ * USS class fails to apply due to load order or asset cache issues.
+ *
+ * Trap: UXML inline style="..." cannot use var(--xxx). CloneTree resolves
+ * inline styles before the element is attached to the tree, so external
+ * stylesheet variables aren't visible yet and StyleVariableResolver throws
+ * NullReferenceException. Always reference variables from USS classes only.
+ * ===================================================================== */
+
+/* ---------- Theme Variables — Dark (default) ---------- */
+:root {
+    --color-bg: #232323;
+    --color-chrome-bg: #1c1c1c;
+    --color-card-bg: #2c2c2c;
+    --color-card-header-bg: #353535;
+    --color-card-border: #3a3a3a;
+
+    --color-tab-hover-bg: rgba(255, 255, 255, 0.06);
+
+    --color-success: #4cd964;
+    --color-success-hover: #5fe077;
+    --color-error: #ff3b30;
+    --color-error-hover: #ff5147;
+    --color-warning: #ff9500;
+    --color-warning-hover: #ffaa33;
+    --color-accent: #4a9eff;
+    --color-accent-hover: #5cacff;
+    --color-muted: #8e8e93;
+
+    --color-text: #dddddd;
+    --color-text-hover: #ffffff;
+    --color-text-tab-idle: #a0a0a0;
+
+    --color-button-bg: #3d3d3d;
+    --color-button-hover: #4a4a4a;
+    --color-input-bg: #1f1f1f;
+    --color-input-border: #2a2a2a;
+    --color-input-focus: #4a9eff;
+}
+
+/* ---------- Theme Variables — Light (Personal Skin) ---------- */
+.unity-theme-light :root,
+.unity-theme-light {
+    --color-bg: #c8c8c8;
+    --color-chrome-bg: #b0b0b0;
+    --color-card-bg: #e2e2e2;
+    --color-card-header-bg: #d4d4d4;
+    --color-card-border: #a8a8a8;
+
+    --color-tab-hover-bg: rgba(0, 0, 0, 0.06);
+
+    --color-success: #1e7e34;
+    --color-success-hover: #2d9748;
+    --color-error: #bd2130;
+    --color-error-hover: #d63540;
+    --color-warning: #d39e00;
+    --color-warning-hover: #e2ad11;
+    --color-accent: #0066cc;
+    --color-accent-hover: #1f7ad8;
+    --color-muted: #6c757d;
+
+    --color-text: #212529;
+    --color-text-hover: #000000;
+    --color-text-tab-idle: #555555;
+
+    --color-button-bg: #d0d0d0;
+    --color-button-hover: #bcbcbc;
+    --color-input-bg: #ffffff;
+    --color-input-border: #b0b0b0;
+    --color-input-focus: #0066cc;
+}
+
+/* ---------- Root Container ---------- */
+.root {
+    background-color: var(--color-bg);
+}
+
+/* ---------- Layout Helpers ---------- */
+.scroll-view {
+    flex-grow: 1;
+}
+
+.horizontal-layout {
+    flex-direction: row;
+    align-items: center;
+}
+
+.flex-grow {
+    flex-grow: 1;
+}
+
+/* ---------- Top Tab Bar ----------
+ * Modern tab style: text-only buttons with a 2px accent underline on active.
+ * Tab bar has its own chrome background to visually anchor the navigation.
+ */
+.tab-bar {
+    background-color: var(--color-chrome-bg);
+    padding: 0 8px;
+    border-bottom-width: 1px;
+    border-bottom-color: var(--color-card-border);
+}
+
+.tab-btn {
+    flex-grow: 1;
+    height: 32px;
+    margin: 0;
+    padding: 0 12px;
+    -unity-font-style: bold;
+    -unity-text-align: middle-center;
+    white-space: nowrap;
+    background-color: rgba(0, 0, 0, 0);
+    border-width: 0;
+    border-radius: 0;
+    color: var(--color-text-tab-idle);
+    transition-property: background-color, color;
+    transition-duration: 0.12s;
+}
+
+.tab-btn:hover {
+    color: var(--color-text-hover);
+    background-color: var(--color-tab-hover-bg);
+}
+
+/* Active text color — covers all interaction states so :focus / :active
+ * pseudo-classes can't pull the color back to idle */
+.tab-btn.tab-active,
+.tab-btn.tab-active:focus,
+.tab-btn.tab-active:active {
+    color: var(--color-accent);
+}
+
+.tab-btn.tab-active:hover {
+    color: var(--color-accent-hover);
+    background-color: var(--color-tab-hover-bg);
+}
+
+/* Independent underline indicator — sits below each tab Button as a sibling
+ * inside .tab-wrap. Using a real element instead of the Button's
+ * border-bottom-color avoids Unity's internal .unity-button :hover / :focus
+ * styles fighting for the border color (which caused the "need to mouse out
+ * and back in to see the underline" symptom). */
+.tab-underline {
+    height: 2px;
+    margin: 0;
+    background-color: rgba(0, 0, 0, 0);
+    transition-property: background-color;
+    transition-duration: 0.12s;
+}
+
+.tab-underline.active {
+    background-color: var(--color-accent);
+}
+
+/* ---------- Tab Content ---------- */
+.tab-content {
+    padding: 10px;
+}
+
+/* ---------- Cards ---------- */
+.card {
+    background-color: var(--color-card-bg);
+    border-width: 1px;
+    border-color: var(--color-card-border);
+    border-radius: 6px;
+    padding: 12px;
+    margin-bottom: 10px;
+}
+
+.card-header {
+    background-color: var(--color-card-header-bg);
+    margin: -12px -12px 10px -12px;
+    padding: 8px 12px;
+    border-top-left-radius: 5px;
+    border-top-right-radius: 5px;
+    border-bottom-width: 1px;
+    border-bottom-color: var(--color-card-border);
+    flex-direction: row;
+    align-items: center;
+}
+
+/* ---------- Typography ---------- */
+.section-title {
+    font-size: 12px;
+    -unity-font-style: bold;
+    color: var(--color-accent);
+}
+
+.bold-label {
+    -unity-font-style: bold;
+    color: var(--color-text);
+}
+
+.muted-label {
+    color: var(--color-muted);
+    font-size: 11px;
+    white-space: normal;
+}
+
+.accent-title {
+    color: var(--color-accent);
+}
+
+.muted-title {
+    color: var(--color-muted);
+}
+
+/* ---------- Status Dot ---------- */
+.status-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 5px;
+    align-self: center;
+    margin-right: 8px;
+    border-width: 2px;
+    border-color: rgba(0, 0, 0, 0.3);
+}
+
+.status-dot.success {
+    background-color: var(--color-success);
+}
+
+.status-dot.error {
+    background-color: var(--color-error);
+}
+
+/* ---------- Buttons ---------- */
+.unity-button {
+    transition-property: background-color, color, border-color;
+    transition-duration: 0.12s;
+}
+
+.btn-primary {
+    background-color: var(--color-accent);
+    color: white;
+    border-width: 0;
+    border-radius: 4px;
+    padding: 4px 10px;
+    -unity-font-style: bold;
+}
+
+.btn-primary:hover {
+    background-color: var(--color-accent-hover);
+}
+
+.btn-danger {
+    background-color: var(--color-error);
+    color: white;
+    border-width: 0;
+    border-radius: 4px;
+    padding: 4px 10px;
+    -unity-font-style: bold;
+}
+
+.btn-danger:hover {
+    background-color: var(--color-error-hover);
+}
+
+.btn-warning {
+    background-color: var(--color-warning);
+    color: white;
+    border-width: 0;
+    border-radius: 4px;
+    padding: 4px 10px;
+    -unity-font-style: bold;
+}
+
+.btn-warning:hover {
+    background-color: var(--color-warning-hover);
+}
+
+.btn-mini {
+    padding: 2px 6px;
+    font-size: 10px;
+    border-radius: 3px;
+}
+
+.btn-start {
+    background-color: var(--color-success) !important;
+    color: white !important;
+}
+
+.btn-start:hover {
+    background-color: var(--color-success-hover) !important;
+}
+
+.btn-stop {
+    background-color: var(--color-error) !important;
+    color: white !important;
+}
+
+.btn-stop:hover {
+    background-color: var(--color-error-hover) !important;
+}
+
+/* ---------- Inputs ---------- */
+.unity-text-field__input,
+.unity-integer-field__input,
+.unity-dropdown-field__input,
+.unity-enum-field__input,
+.unity-base-text-field__input,
+.unity-base-popup-field__input {
+    background-color: var(--color-input-bg);
+    border-color: var(--color-input-border);
+    color: var(--color-text);
+    border-radius: 3px;
+}
+
+.unity-text-field__input:focus,
+.unity-integer-field__input:focus,
+.unity-base-text-field__input:focus {
+    border-color: var(--color-input-focus);
+}
+
+/* ---------- Badges ---------- */
+.badge-experimental {
+    background-color: var(--color-warning);
+    color: white;
+    font-size: 9px;
+    padding: 1px 5px;
+    border-radius: 3px;
+    margin-left: 6px;
+    -unity-font-style: bold;
+    align-self: center;
+}
+
+/* ---------- Foldout ---------- */
+.unity-foldout__toggle {
+    margin-left: 0;
+    padding-left: 0;
+}
+
+.unity-foldout__content {
+    margin-left: 12px;
+    padding-top: 4px;
+}
+
+/* ---------- Spacing Helpers ---------- */
+.space-xs {
+    height: 4px;
+}
+
+.space-sm {
+    height: 8px;
+}
+
+.space-md {
+    height: 12px;
+}
+
+/* ---------- Footer ---------- */
+.footer {
+    background-color: var(--color-chrome-bg);
+    padding: 6px 10px;
+    border-top-width: 1px;
+    border-top-color: var(--color-card-border);
+}
+
+.lang-toggle {
+    width: 90px;
+    height: 22px;
+    padding: 0 8px;
+    font-size: 11px;
+    border-width: 0;
+    border-radius: 3px;
+    background-color: var(--color-button-bg);
+    color: var(--color-text);
+}
+
+.lang-toggle:hover {
+    background-color: var(--color-button-hover);
+    color: var(--color-text-hover);
+}
+
+/* ---------- Divider Helpers ----------
+ * UXML elements that need a divider line should use these classes instead
+ * of writing border-color: var(--xxx) in inline style (which crashes
+ * CloneTree — see file header).
+ */
+.divider-top {
+    border-top-width: 1px;
+    border-top-color: var(--color-card-border);
+}
+
+.divider-bottom {
+    border-bottom-width: 1px;
+    border-bottom-color: var(--color-card-border);
+}

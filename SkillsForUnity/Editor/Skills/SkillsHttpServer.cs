@@ -345,7 +345,6 @@ namespace UnitySkills
         {
             ("claude", "ClaudeCode"), ("anthropic", "ClaudeCode"),
             ("codex", "Codex"), ("openai", "Codex"),
-            ("gemini", "Gemini"), ("google", "Gemini"),
             ("cursor", "Cursor"),
             ("trae", "Trae"), ("bytedance", "Trae"),
             ("antigravity", "Antigravity"),

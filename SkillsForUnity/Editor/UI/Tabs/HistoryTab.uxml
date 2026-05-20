@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" xsi="http://www.w3.org/2001/XMLSchema-instance" engine="UnityEngine.UIElements" editor="UnityEditor.UIElements" noNamespaceSchemaLocation="../../../../../../../UIElementsSchema/UIElementsSchema.xsd">
+    <ui:ScrollView class="scroll-view">
+        <!-- 头部工具栏 -->
+        <ui:VisualElement class="horizontal-layout divider-bottom" style="margin-bottom: 4px; padding-bottom: 4px;">
+            <ui:Label name="history-title" class="section-title" />
+            <ui:VisualElement class="flex-grow" />
+            <ui:Button name="refresh-btn" style="width: 60px; margin: 0 4px 0 0;" />
+            <ui:Button name="clear-btn" class="btn-danger" style="width: 100px; margin: 0;" />
+        </ui:VisualElement>
+
+        <!-- 缓存警告框 -->
+        <ui:HelpBox name="cache-warning" message-type="Warning" style="margin-bottom: 10px;" />
+
+        <!-- 活动任务列表 -->
+        <ui:Label name="active-tasks-title" class="bold-label accent-title" style="font-size: 12px; margin-bottom: 6px;" />
+        <ui:VisualElement name="active-tasks-container" />
+
+        <!-- 已撤销任务列表 -->
+        <ui:Label name="undone-tasks-title" class="bold-label muted-title" style="font-size: 12px; margin-top: 10px; margin-bottom: 6px;" />
+        <ui:VisualElement name="undone-tasks-container" />
+    </ui:ScrollView>
+</ui:UXML>

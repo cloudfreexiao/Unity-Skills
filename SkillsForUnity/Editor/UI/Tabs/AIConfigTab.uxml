@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" xsi="http://www.w3.org/2001/XMLSchema-instance" engine="UnityEngine.UIElements" editor="UnityEditor.UIElements" noNamespaceSchemaLocation="../../../../../../../UIElementsSchema/UIElementsSchema.xsd">
+    <ui:ScrollView class="scroll-view">
+        <!-- 标题 -->
+        <ui:Label name="config-title" class="section-title" style="margin-bottom: 10px;" />
+
+        <!-- 5 个 AI Agent 动态生成的容器 -->
+        <ui:VisualElement name="agents-container" />
+
+        <!-- 自定义安装区 -->
+        <ui:VisualElement class="card">
+            <ui:VisualElement class="card-header">
+                <ui:Label name="custom-title" class="section-title" />
+            </ui:VisualElement>
+
+            <!-- 路径选择 -->
+            <ui:VisualElement class="horizontal-layout" style="margin-bottom: 6px;">
+                <ui:Label name="custom-path-label" style="width: 60px;" />
+                <ui:TextField name="custom-path-field" class="flex-grow" style="margin: 0;" />
+                <ui:Button name="custom-path-browse-btn" text="..." style="width: 30px; margin: 0 0 0 4px;" />
+            </ui:VisualElement>
+
+            <!-- Agent 名称 -->
+            <ui:VisualElement class="horizontal-layout" style="margin-bottom: 8px;">
+                <ui:Label name="custom-agent-label" style="width: 60px;" />
+                <ui:TextField name="custom-agent-field" class="flex-grow" style="margin: 0;" />
+            </ui:VisualElement>
+
+            <!-- 安装按钮 -->
+            <ui:Button name="custom-install-btn" style="height: 24px; margin: 0; -unity-font-style: bold;" />
+        </ui:VisualElement>
+
+        <ui:VisualElement class="space-sm" />
+
+        <!-- 提示框 -->
+        <ui:HelpBox name="help-box" message-type="Info" style="margin: 0;" />
+    </ui:ScrollView>
+</ui:UXML>

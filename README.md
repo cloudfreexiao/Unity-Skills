@@ -32,7 +32,7 @@ This project is a deep refactoring and feature extension based on the excellent 
 
 - 🛠️ **714 REST Skills Comprehensive Toolkit**: Includes 51 functional source modules plus 19 advisory design modules, with Batch operations for multi-object control.
 - 🎛️ **Dual-Mode Flexibility**: Use Semi-Auto (code-first routing) or Full-Auto (direct manipulation routing) for different workflows.
-- 🤖 **4 Major IDEs Native Support**: Claude Code / Antigravity / Gemini CLI / Codex — one-click install and use.
+- 🤖 **4 Major IDEs Native Support**: Claude Code / Antigravity / Codex / Cursor — one-click install and use.
 - 🛡️ **Transactional Atomicity**: Failed operations auto-rollback, leaving scenes clean and safe.
 - 🌍 **Multi-Instance Simultaneous Control**: Automatic port discovery and global registry for controlling multiple Unity projects at once.
 - 🔗 **Ultra-Stable Long Connections**: Configurable request timeout (default 15 minutes), automatic recovery after Domain Reload, with retry hints during script compilation/asset updates.
@@ -63,10 +63,10 @@ This project has been deeply optimized for the following environments to ensure 
 
 | AI Terminal | Support Status | Special Features |
 | :--- | :---: | :--- |
-| **Antigravity** | ✅ Supported | Supports `/unity-skills` slash commands with native workflow integration. |
+| **Antigravity** | ✅ Supported | Open Agent Skills standard via `.agents/skills/` (workspace) and `~/.gemini/antigravity/skills/` (global). |
 | **Claude Code** | ✅ Supported | Intelligent Skill intent recognition, supports complex multi-step automation. |
-| **Gemini CLI** | ✅ Supported | Experimental support, adapted to the latest `experimental.skills` specification. |
-| **Codex** | ✅ Supported | Supports `$skill` explicit invocation and implicit intent recognition. |
+| **Codex** | ✅ Supported | Supports `$skill` explicit invocation and implicit intent recognition. Shares `.agents/skills/` with Antigravity in workspace mode. |
+| **Cursor** | ✅ Supported | Auto-discovers `.cursor/skills/` and `.agents/skills/`; supports `/skill-name` explicit invocation; visible in Settings → Rules. |
 
 ---
 
@@ -105,7 +105,7 @@ In Unity, click menu: `Window > UnitySkills > Start Server`
 
 ### 3. One-Click AI Skills Configuration
 1. Open `Window > UnitySkills > Skill Installer`.
-2. Select the corresponding terminal icon (Claude / Antigravity / Gemini / Codex).
+2. Select the corresponding terminal icon (Claude / Antigravity / Codex / Cursor).
 3. Click **"Install"** to complete the environment configuration without manual code copying.
 
 > The installer copies the `unity-skills~/` template directory from the package to the target location.
@@ -116,9 +116,8 @@ In Unity, click menu: `Window > UnitySkills > Start Server`
 > - `references/`
 > - `scripts/unity_skills.py`
 > - `scripts/agent_config.json` (contains Agent identifier)
-> - Antigravity additionally generates `workflows/unity-skills.md`
 
-> **Codex Note**: **Global installation** is recommended. Project-level installation requires declaration in `AGENTS.md` to be recognized; after global installation, restart Codex to use.
+> **Codex Note**: Antigravity and Codex share `.agents/skills/` in workspace mode — installing once for either makes the skill available to both. Codex auto-discovers skills in `.agents/skills/`; no `AGENTS.md` declaration needed.
 
 📘 For complete installation and usage instructions, see: [Setup Guide](docs/SETUP_GUIDE.md) | [安装指南](docs/SETUP_GUIDE_CN.md)
 
@@ -138,7 +137,7 @@ If one-click installation is not supported or preferred, follow this **standard 
    ```json
    {"agentId": "your-agent-name", "installedAt": "2026-02-11T00:00:00Z"}
    ```
-   Replace `your-agent-name` with the name of your AI tool (e.g., `claude-code`, `antigravity`, `gemini-cli`, `codex`).
+   Replace `your-agent-name` with the name of your AI tool (e.g., `claude-code`, `antigravity`, `codex`, `cursor`).
 5. **Directory Structure Requirements**: After copying, maintain the structure as follows (example):
    - `unity-skills/SKILL.md`
    - `unity-skills/skills/`
@@ -152,9 +151,9 @@ If one-click installation is not supported or preferred, follow this **standard 
 The following are verified default directories (if the tool has a custom path configured, use that instead):
 
 - Claude Code: `~/.claude/skills/`
-- Antigravity: `~/.agent/skills/`
-- Gemini CLI: `~/.gemini/skills/`
-- OpenAI Codex: `~/.codex/skills/`
+- Antigravity: `~/.gemini/antigravity/skills/` (global) or `.agents/skills/` (workspace)
+- OpenAI Codex: `~/.agents/skills/` (global) or `.agents/skills/` (workspace, shared with Antigravity)
+- Cursor: `~/.cursor/skills/` (global) or `.cursor/skills/` (workspace); also auto-discovers `.agents/skills/`
 
 #### 🧩 Other Tools Supporting Skills
 If you're using other tools that support Skills, install according to the Skills root directory specified in that tool's documentation. As long as the **standard installation specification** is met (root directory contains `SKILL.md` and maintains `skills/`, `references/`, and `scripts/` structure), it will be correctly recognized.

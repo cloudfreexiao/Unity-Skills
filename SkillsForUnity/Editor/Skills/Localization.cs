@@ -72,7 +72,6 @@ namespace UnitySkills
             {"skill_config", "AI Skill Configuration"},
             {"claude_code", "Claude Code"},
             {"antigravity", "Antigravity"},
-            {"gemini_cli", "Gemini CLI"},
             {"cursor", "Cursor"},
             {"install_project", "Install to Project"},
             {"install_global", "Install Global"},
@@ -87,8 +86,7 @@ namespace UnitySkills
             {"uninstall_success", "Skill uninstalled successfully!"},
             {"uninstall_failed", "Uninstall failed: {0}"},
             {"uninstall_confirm", "Are you sure you want to uninstall {0}?"},
-            {"gemini_enable_hint", "\n\nNote: Enable experimental.skills in Gemini CLI /settings"},
-            
+
             // Server stats
             {"server_stats", "Live Statistics"},
             {"queued_requests", "Queued Requests"},
@@ -935,7 +933,6 @@ namespace UnitySkills
             {"skill_config", "AI Skill 配置"},
             {"claude_code", "Claude Code"},
             {"antigravity", "Antigravity"},
-            {"gemini_cli", "Gemini CLI"},
             {"cursor", "Cursor"},
             {"install_project", "安装到项目"},
             {"install_global", "全局安装"},
@@ -950,8 +947,7 @@ namespace UnitySkills
             {"uninstall_success", "Skill 卸载成功！"},
             {"uninstall_failed", "卸载失败：{0}"},
             {"uninstall_confirm", "确定要卸载 {0} 吗？"},
-            {"gemini_enable_hint", "\n\n注意：请在 Gemini CLI 的 /settings 中启用 experimental.skills"},
-            
+
             // Server stats
             {"server_stats", "实时统计"},
             {"queued_requests", "队列中请求"},
