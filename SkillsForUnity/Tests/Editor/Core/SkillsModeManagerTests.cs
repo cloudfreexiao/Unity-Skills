@@ -1,4 +1,5 @@
 using System.Linq;
+using System.Reflection;
 using Newtonsoft.Json.Linq;
 using NUnit.Framework;
 using UnityEditor;
@@ -11,6 +12,13 @@ namespace UnitySkills.Tests.Core
     /// Covers three operating modes (Approval / Auto / Bypass), two approval channels
     /// (Dialog / Panel), auto NeverInSemi judgement, grant token lifecycle, EditorPrefs
     /// persistence and the upgrade-compat rule (existing install → Bypass).
+    ///
+    /// v1.9 改版后新增覆盖（工作包 A）：
+    /// - Allowlist 通道 (AddToAllowlist / RemoveFromAllowlist / ClearAllowlist / IsInAllowlist)
+    /// - Allowlist 优先于 IsForbiddenInSemi
+    /// - 单次有效 grant：TryGrant 不再永久写白名单
+    /// - TryGrantAndReturnArgs (方案 B 一步执行) + ConsumeOneShotBypass
+    /// - 老 GrantedSkills EditorPrefs → 新 AllowlistSkills 迁移幂等
     ///
     /// Side-effects: every test SetUp wipes UnitySkills_* EditorPrefs and resets the
     /// in-memory grant table + on-disk audit log. Legacy install marker keys are
@@ -35,6 +43,9 @@ namespace UnitySkills.Tests.Core
         };
 
         private const string PrefKeyMode = "UnitySkills_OperatingMode";
+        private const string PrefKeyAllowlist = "UnitySkills_AllowlistSkills";
+        private const string PrefKeyMigrationDone = "UnitySkills_AllowlistMigratedFromGranted";
+        private const string PrefKeyLegacyGranted = "UnitySkills_GrantedSkills";
 
         [OneTimeSetUp]
         public void OneTimeSetUp()
@@ -180,11 +191,11 @@ namespace UnitySkills.Tests.Core
         }
 
         // ═════════════════════════════════════════════════════════════════
-        //  Test matrix #6 — Approval + Dialog grant + recheck → Allowed
+        //  Test matrix #6 — Approval + Dialog grant：单次有效，不进白名单
         // ═════════════════════════════════════════════════════════════════
 
         [Test]
-        public void Approval_DialogChannel_GrantThenRecheck_Allowed()
+        public void Approval_DialogChannel_GrantIsOneShot_NotWrittenToAllowlist()
         {
             SkillsModeManager.CurrentMode = SkillsOperatingMode.Approval;
             SkillsModeManager.PanelApprovalRequired = false; // explicit, default
@@ -199,9 +210,10 @@ namespace UnitySkills.Tests.Core
 
             Assert.IsTrue(SkillsModeManager.TryGrant(skillName, token, args));
 
-            Assert.AreEqual(SkillsModeManager.AccessResult.Allowed,
+            // v1.9 改版：grant 不再永久写白名单。重新 CheckAccess（无 one-shot 重入）应再次 NeedsGrant。
+            CollectionAssert.DoesNotContain(SkillsModeManager.AllowlistSkills, skillName);
+            Assert.AreEqual(SkillsModeManager.AccessResult.NeedsGrant,
                 SkillsModeManager.CheckAccess(MakeSkill(skillName)));
-            CollectionAssert.Contains(SkillsModeManager.GrantedSkills, skillName);
         }
 
         // ═════════════════════════════════════════════════════════════════
@@ -223,7 +235,7 @@ namespace UnitySkills.Tests.Core
             // AI re-plays the token before the user clicks Approve on the panel.
             Assert.AreEqual(GrantOutcome.PendingApproval,
                 SkillsModeManager.TryGrantDetailed(skillName, token, args));
-            CollectionAssert.DoesNotContain(SkillsModeManager.GrantedSkills, skillName);
+            CollectionAssert.DoesNotContain(SkillsModeManager.AllowlistSkills, skillName);
 
             // The entry is still alive in the panel pending list.
             var pending = SkillsModeManager.PeekPendingForTests(token);
@@ -233,11 +245,11 @@ namespace UnitySkills.Tests.Core
         }
 
         // ═════════════════════════════════════════════════════════════════
-        //  Test matrix #8 — Approval + Panel Approve + grant + recheck → Allowed
+        //  Test matrix #8 — Approval + Panel Approve → entry 保留、单次有效
         // ═════════════════════════════════════════════════════════════════
 
         [Test]
-        public void Approval_PanelChannel_ApproveThenGrant_RecheckAllowed()
+        public void Approval_PanelChannel_ApproveKeepsEntry_GrantThenOneShot()
         {
             SkillsModeManager.CurrentMode = SkillsOperatingMode.Approval;
             SkillsModeManager.PanelApprovalRequired = true;
@@ -248,16 +260,18 @@ namespace UnitySkills.Tests.Core
             var (token, _, _) = SkillsModeManager.IssueGrantRequest(skillName, args);
 
             Assert.IsTrue(SkillsModeManager.Approve(token));
-            // Per α-Core protocol the skill enters GrantedSkills immediately on Approve
-            // so the AI's re-call of the original skill succeeds.
-            CollectionAssert.Contains(SkillsModeManager.GrantedSkills, skillName);
+            // v1.9 改版：Approve 不再永久写白名单，entry 保留等待后续 grant 触发一次性执行。
+            CollectionAssert.DoesNotContain(SkillsModeManager.AllowlistSkills, skillName);
+            var pendingAfterApprove = SkillsModeManager.PeekPendingForTests(token);
+            Assert.IsNotNull(pendingAfterApprove, "Entry must be kept after Approve for AI re-grant.");
+            Assert.IsTrue(pendingAfterApprove.ApprovedByPanel);
 
-            // A racing TryGrant from the AI side must still succeed (token kept alive).
+            // AI 后续 grant 走 Granted 分支并消费 entry；不写白名单。
             Assert.AreEqual(GrantOutcome.Granted,
                 SkillsModeManager.TryGrantDetailed(skillName, token, args));
-
-            Assert.AreEqual(SkillsModeManager.AccessResult.Allowed,
-                SkillsModeManager.CheckAccess(MakeSkill(skillName)));
+            CollectionAssert.DoesNotContain(SkillsModeManager.AllowlistSkills, skillName);
+            Assert.IsNull(SkillsModeManager.PeekPendingForTests(token),
+                "Entry must be consumed after Granted.");
         }
 
         // ═════════════════════════════════════════════════════════════════
@@ -277,11 +291,11 @@ namespace UnitySkills.Tests.Core
 
             Assert.IsTrue(SkillsModeManager.Deny(token));
 
-            // Token entry is gone, grant must fail and the skill stays ungranted.
+            // Token entry is gone, grant must fail and the skill stays out of allowlist.
             Assert.IsFalse(SkillsModeManager.TryGrant(skillName, token, args));
             Assert.AreEqual(GrantOutcome.Invalid,
                 SkillsModeManager.TryGrantDetailed(skillName, token, args));
-            CollectionAssert.DoesNotContain(SkillsModeManager.GrantedSkills, skillName);
+            CollectionAssert.DoesNotContain(SkillsModeManager.AllowlistSkills, skillName);
             Assert.IsNull(SkillsModeManager.PeekPendingForTests(token));
         }
 
@@ -328,24 +342,22 @@ namespace UnitySkills.Tests.Core
         }
 
         // ═════════════════════════════════════════════════════════════════
-        //  Test matrix #12 — Revoke after grant → back to NeedsGrant
+        //  Test matrix #12 — Allowlist + remove → 回到 NeedsGrant
         // ═════════════════════════════════════════════════════════════════
 
         [Test]
-        public void Revoke_AfterGrant_CheckAccessReturnsNeedsGrant()
+        public void RemoveFromAllowlist_AfterAdd_CheckAccessReturnsNeedsGrant()
         {
             SkillsModeManager.CurrentMode = SkillsOperatingMode.Approval;
             const string skillName = "smart_layout";
-            const string args = "{}";
 
-            var (token, _, _) = SkillsModeManager.IssueGrantRequest(skillName, args);
-            Assert.IsTrue(SkillsModeManager.TryGrant(skillName, token, args));
+            Assert.IsTrue(SkillsModeManager.AddToAllowlist(skillName));
             Assert.AreEqual(SkillsModeManager.AccessResult.Allowed,
                 SkillsModeManager.CheckAccess(MakeSkill(skillName)));
 
-            SkillsModeManager.Revoke(skillName);
+            Assert.IsTrue(SkillsModeManager.RemoveFromAllowlist(skillName));
 
-            CollectionAssert.DoesNotContain(SkillsModeManager.GrantedSkills, skillName);
+            CollectionAssert.DoesNotContain(SkillsModeManager.AllowlistSkills, skillName);
             Assert.AreEqual(SkillsModeManager.AccessResult.NeedsGrant,
                 SkillsModeManager.CheckAccess(MakeSkill(skillName)));
         }
@@ -462,6 +474,254 @@ namespace UnitySkills.Tests.Core
             // SetUp left zero UnitySkills_* keys behind.
             Assert.AreEqual(SkillsOperatingMode.Approval, SkillsModeManager.CurrentMode);
             Assert.IsFalse(EditorPrefs.HasKey(PrefKeyMode));
+        }
+
+        // ═════════════════════════════════════════════════════════════════
+        //  Test matrix #18 — Allowlist API: add / remove / clear / IsInAllowlist
+        // ═════════════════════════════════════════════════════════════════
+
+        [Test]
+        public void Allowlist_AddRemoveClear_RoundTripsAndAudits()
+        {
+            Assert.IsFalse(SkillsModeManager.IsInAllowlist("alpha"));
+            CollectionAssert.IsEmpty(SkillsModeManager.AllowlistSkills);
+
+            // Add new → true; Add same → false; query reflects.
+            Assert.IsTrue(SkillsModeManager.AddToAllowlist("alpha"));
+            Assert.IsFalse(SkillsModeManager.AddToAllowlist("alpha"));
+            Assert.IsTrue(SkillsModeManager.IsInAllowlist("alpha"));
+            Assert.IsTrue(SkillsModeManager.AddToAllowlist("beta"));
+            CollectionAssert.AreEquivalent(new[] { "alpha", "beta" }, SkillsModeManager.AllowlistSkills);
+
+            // Remove existing → true; remove missing → false.
+            Assert.IsTrue(SkillsModeManager.RemoveFromAllowlist("alpha"));
+            Assert.IsFalse(SkillsModeManager.RemoveFromAllowlist("alpha"));
+            Assert.IsFalse(SkillsModeManager.IsInAllowlist("alpha"));
+
+            // Clear → empty.
+            SkillsModeManager.ClearAllowlist();
+            CollectionAssert.IsEmpty(SkillsModeManager.AllowlistSkills);
+
+            // Whitespace/null inputs are no-ops.
+            Assert.IsFalse(SkillsModeManager.AddToAllowlist(""));
+            Assert.IsFalse(SkillsModeManager.AddToAllowlist("   "));
+            Assert.IsFalse(SkillsModeManager.AddToAllowlist(null));
+            Assert.IsFalse(SkillsModeManager.RemoveFromAllowlist(null));
+            Assert.IsFalse(SkillsModeManager.IsInAllowlist(null));
+        }
+
+        // ═════════════════════════════════════════════════════════════════
+        //  Test matrix #19 — Allowlist overrides IsForbiddenInSemi
+        // ═════════════════════════════════════════════════════════════════
+
+        [Test]
+        public void Allowlist_OverridesForbiddenInSemi_HighRiskSkillAllowed()
+        {
+            SkillsModeManager.CurrentMode = SkillsOperatingMode.Approval;
+
+            // 默认拦截
+            Assert.AreEqual(SkillsModeManager.AccessResult.Forbidden,
+                SkillsModeManager.CheckAccess(MakeSkill("scene_clear")));
+
+            // 加入 Allowlist 后被放行（即使在 explicit never list 里）
+            Assert.IsTrue(SkillsModeManager.AddToAllowlist("scene_clear"));
+            Assert.AreEqual(SkillsModeManager.AccessResult.Allowed,
+                SkillsModeManager.CheckAccess(MakeSkill("scene_clear")));
+
+            // 同样适用于 metadata 判定的高危 skill
+            Assert.IsTrue(SkillsModeManager.AddToAllowlist("delete_thing"));
+            Assert.AreEqual(SkillsModeManager.AccessResult.Allowed,
+                SkillsModeManager.CheckAccess(MakeSkill("delete_thing", op: SkillOperation.Delete)));
+        }
+
+        // ═════════════════════════════════════════════════════════════════
+        //  Test matrix #20 — TryGrantAndReturnArgs（方案 B 一步执行）
+        // ═════════════════════════════════════════════════════════════════
+
+        [Test]
+        public void TryGrantAndReturnArgs_OnGranted_ReturnsCachedArgsAndConsumesEntry()
+        {
+            SkillsModeManager.CurrentMode = SkillsOperatingMode.Approval;
+            SkillsModeManager.PanelApprovalRequired = false;
+            const string skillName = "smart_layout";
+            const string args = "{\"target\":\"Cube\",\"value\":42}";
+
+            var (token, _, _) = SkillsModeManager.IssueGrantRequest(skillName, args);
+
+            var (outcome, returnedName, returnedArgs) =
+                SkillsModeManager.TryGrantAndReturnArgs(skillName, token, args);
+
+            Assert.AreEqual(GrantOutcome.Granted, outcome);
+            Assert.AreEqual(skillName, returnedName);
+            Assert.AreEqual(args, returnedArgs, "Should return original cached argsJson verbatim");
+
+            // entry 被消费
+            Assert.IsNull(SkillsModeManager.PeekPendingForTests(token));
+
+            // 二次调用同 token 必须 Invalid
+            var (secondOutcome, _, _) =
+                SkillsModeManager.TryGrantAndReturnArgs(skillName, token, args);
+            Assert.AreEqual(GrantOutcome.Invalid, secondOutcome);
+        }
+
+        [Test]
+        public void TryGrantAndReturnArgs_PanelChannelBeforeApprove_ReturnsPendingApproval()
+        {
+            SkillsModeManager.CurrentMode = SkillsOperatingMode.Approval;
+            SkillsModeManager.PanelApprovalRequired = true;
+            const string skillName = "smart_layout";
+            const string args = "{}";
+
+            var (token, _, _) = SkillsModeManager.IssueGrantRequest(skillName, args);
+
+            var (outcome, returnedName, returnedArgs) =
+                SkillsModeManager.TryGrantAndReturnArgs(skillName, token, args);
+            Assert.AreEqual(GrantOutcome.PendingApproval, outcome);
+            Assert.IsNull(returnedName);
+            Assert.IsNull(returnedArgs);
+
+            // entry 必须保留以便后续 Approve
+            Assert.IsNotNull(SkillsModeManager.PeekPendingForTests(token));
+        }
+
+        // ═════════════════════════════════════════════════════════════════
+        //  Test matrix #21 — One-shot bypass：grant 方案 B 让 CheckAccess 单次放行
+        // ═════════════════════════════════════════════════════════════════
+
+        [Test]
+        public void OneShotBypass_AfterTryGrantAndReturnArgs_CheckAccessAllowedOnce()
+        {
+            SkillsModeManager.CurrentMode = SkillsOperatingMode.Approval;
+            const string skillName = "smart_layout";
+            const string args = "{}";
+
+            var (token, _, _) = SkillsModeManager.IssueGrantRequest(skillName, args);
+            var (outcome, _, _) = SkillsModeManager.TryGrantAndReturnArgs(skillName, token, args);
+            Assert.AreEqual(GrantOutcome.Granted, outcome);
+
+            // 第一次 CheckAccess 命中 one-shot，被放行
+            Assert.AreEqual(SkillsModeManager.AccessResult.Allowed,
+                SkillsModeManager.CheckAccess(MakeSkill(skillName)));
+
+            // 再次 CheckAccess 已经消费完，回到 NeedsGrant
+            Assert.AreEqual(SkillsModeManager.AccessResult.NeedsGrant,
+                SkillsModeManager.CheckAccess(MakeSkill(skillName)));
+        }
+
+        [Test]
+        public void ConsumeOneShotBypass_NameMismatchOrEmpty_ReturnsFalse()
+        {
+            // 直接构造空状态
+            Assert.IsFalse(SkillsModeManager.ConsumeOneShotBypass("anything"));
+
+            // 设置 one-shot 后名字不匹配也不消费
+            SkillsModeManager.CurrentMode = SkillsOperatingMode.Approval;
+            var (token, _, _) = SkillsModeManager.IssueGrantRequest("alpha", "{}");
+            SkillsModeManager.TryGrantAndReturnArgs("alpha", token, "{}");
+
+            Assert.IsFalse(SkillsModeManager.ConsumeOneShotBypass("beta"));
+            Assert.IsFalse(SkillsModeManager.ConsumeOneShotBypass(""));
+            Assert.IsFalse(SkillsModeManager.ConsumeOneShotBypass(null));
+
+            // 名字匹配（大小写无关）才消费
+            Assert.IsTrue(SkillsModeManager.ConsumeOneShotBypass("ALPHA"));
+            // 消费后下一次必失败
+            Assert.IsFalse(SkillsModeManager.ConsumeOneShotBypass("alpha"));
+        }
+
+        // ═════════════════════════════════════════════════════════════════
+        //  Test matrix #22 — EditorPrefs 迁移：legacy granted → allowlist，幂等
+        // ═════════════════════════════════════════════════════════════════
+
+        /// <summary>
+        /// Force the in-memory allowlist cache field to null so the next public access
+        /// re-runs <c>EnsureAllowlistLoaded</c> → <c>MigrateLegacyGrantedToAllowlist</c>.
+        /// Mirrors what a fresh editor launch would do.
+        /// </summary>
+        private static void ForceAllowlistReload()
+        {
+            var field = typeof(SkillsModeManager).GetField("_allowlist",
+                BindingFlags.NonPublic | BindingFlags.Static);
+            Assert.IsNotNull(field, "_allowlist field must exist for reload simulation");
+            field.SetValue(null, null);
+        }
+
+        [Test]
+        public void Migration_LegacyGrantedToAllowlist_MigratesEntriesAndSetsDoneFlag()
+        {
+            // 1) 模拟老 v1.9 install：写 legacy granted、清掉迁移标记和新 allowlist。
+            EditorPrefs.SetString(PrefKeyLegacyGranted, "[\"alpha\",\"beta\",\"gamma\"]");
+            EditorPrefs.DeleteKey(PrefKeyMigrationDone);
+            EditorPrefs.DeleteKey(PrefKeyAllowlist);
+            ForceAllowlistReload();
+
+            // 2) 首次访问触发迁移
+            var snapshot = SkillsModeManager.AllowlistSkills;
+            CollectionAssert.AreEquivalent(new[] { "alpha", "beta", "gamma" }, snapshot);
+
+            // 3) 迁移完成标记已写入
+            Assert.IsTrue(EditorPrefs.GetBool(PrefKeyMigrationDone, false),
+                "Migration must set the done flag after running");
+
+            // 4) Legacy key 故意保留（回滚标记）
+            Assert.IsTrue(EditorPrefs.HasKey(PrefKeyLegacyGranted),
+                "Legacy granted key must be preserved as rollback marker");
+
+            // 5) 新 allowlist 已持久化
+            Assert.IsTrue(EditorPrefs.HasKey(PrefKeyAllowlist),
+                "Allowlist pref must be persisted after migration");
+
+            // 6) 审计事件已写入
+            SkillsAuditLog.FlushSync();
+            var recent = SkillsAuditLog.ReadRecent(100);
+            bool sawMigration = recent
+                .OfType<JObject>()
+                .Any(j => j["type"]?.ToString() == "allowlist_migrated");
+            Assert.IsTrue(sawMigration, "Expected 'allowlist_migrated' audit event after first migration");
+        }
+
+        [Test]
+        public void Migration_RepeatLoad_IsIdempotent_NoDuplicateAuditEvent()
+        {
+            // 第一次：跑迁移
+            EditorPrefs.SetString(PrefKeyLegacyGranted, "[\"alpha\"]");
+            EditorPrefs.DeleteKey(PrefKeyMigrationDone);
+            EditorPrefs.DeleteKey(PrefKeyAllowlist);
+            ForceAllowlistReload();
+            var _first = SkillsModeManager.AllowlistSkills;
+            Assert.IsTrue(EditorPrefs.GetBool(PrefKeyMigrationDone, false));
+
+            // 清审计后，再"重启"一次（done flag 仍在）
+            SkillsAuditLog.ResetForTests();
+            ForceAllowlistReload();
+            var snapshotAfterReload = SkillsModeManager.AllowlistSkills;
+
+            // 内容仍来自持久化的 PrefKeyAllowlist，不重复加 legacy 的数据
+            CollectionAssert.AreEquivalent(new[] { "alpha" }, snapshotAfterReload);
+
+            // 也不重复发 allowlist_migrated 审计事件
+            SkillsAuditLog.FlushSync();
+            var recent = SkillsAuditLog.ReadRecent(100);
+            bool sawMigration = recent
+                .OfType<JObject>()
+                .Any(j => j["type"]?.ToString() == "allowlist_migrated");
+            Assert.IsFalse(sawMigration,
+                "Migration must not re-run when PrefKeyMigrationDone is already true");
+        }
+
+        [Test]
+        public void Migration_NoLegacyData_StillSetsDoneFlag_FreshInstall()
+        {
+            // Fresh install：没有任何 legacy 数据
+            EditorPrefs.DeleteKey(PrefKeyLegacyGranted);
+            EditorPrefs.DeleteKey(PrefKeyMigrationDone);
+            EditorPrefs.DeleteKey(PrefKeyAllowlist);
+            ForceAllowlistReload();
+
+            var snapshot = SkillsModeManager.AllowlistSkills;
+            CollectionAssert.IsEmpty(snapshot);
+            Assert.IsTrue(EditorPrefs.GetBool(PrefKeyMigrationDone, false),
+                "Done flag must still be set on fresh install so future reads skip migration");
         }
     }
 }

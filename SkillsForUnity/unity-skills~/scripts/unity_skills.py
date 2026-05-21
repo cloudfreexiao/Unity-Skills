@@ -22,7 +22,7 @@ import threading
 from typing import Any, Dict, List, Optional
 from urllib.parse import urlencode
 
-__version__ = "1.9.0"
+__version__ = "1.9.1"
 
 UNITY_URL = "http://localhost:8090"
 DEFAULT_PORT = 8090
@@ -864,17 +864,30 @@ def get_permission_status(token: str = None) -> Dict[str, Any]:
 
 
 def grant_permission(skill: str, token: str, args: Dict[str, Any]) -> Dict[str, Any]:
-    """Dialog 渠道用：AI 在对话获用户同意后调用以激活授权。
+    """单次一步执行 grant：AI 用此把 ``MODE_RESTRICTED`` 的请求换成执行结果。
 
     ``args`` 必须与原 skill 调用一致（不含 ``_confirm``），服务端会用其重算
     hash 校验 token-args 绑定，防止 AI 拿一个 token 套到其它 skill 调用上。
 
-    Panel 渠道下调用会返回 ``{ok: False, reason: "GRANT_PENDING_APPROVAL"}``，
-    此时不应重试 grant，应提示用户到 Unity 面板点 Approve，再用
-    ``get_permission_status(token=...)`` 轮询审批结果。
+    **响应结构（v1.9 重构后）**：成功时返回
+    ``{ok: True, executed: True, skill, result: <原 skill 的 Execute 输出>}``。
+    服务端在 grant 通过的同一次请求里直接执行了该 skill，**AI 不需要再调一次
+    原 skill 端点** —— 直接消费 ``result`` 即可。grant 不再写入永久白名单，
+    同一 skill 第二次调用仍会触发 ``MODE_RESTRICTED``，需要重新走 grant。
+
+    Panel 渠道下若 AI 在用户点 Approve 之前调用，会返回
+    ``{ok: False, reason: "GRANT_PENDING_APPROVAL"}``，应提示用户去 Unity
+    面板点 Approve，再用 ``get_permission_status(token=...)`` 轮询审批结果，
+    确认后再调一次 ``grant_permission`` 拿 ``result``。
+
+    Example::
+
+        resp = grant_permission(skill="scene_save", token=tk, args={"path": "..."})
+        if resp.get("ok") and resp.get("executed"):
+            return resp["result"]  # 直接拿 skill 执行结果，不需要再调 scene_save
 
     Args:
-        skill: 待授权的 skill 名。
+        skill: 待授权并执行的 skill 名。
         token: 服务端在 ``MODE_RESTRICTED`` 错误响应里发的 ``grantRequestToken``。
         args: 原 skill 调用参数（dict），不含 ``_confirm``。
     """
@@ -905,15 +918,64 @@ def deny_grant(token: str) -> Dict[str, Any]:
 
 
 def revoke_permission(skill: str = None, all: bool = False) -> Dict[str, Any]:
-    """撤销单个 skill 或全部授权。``skill`` 与 ``all`` 二选一。
+    """[Deprecated] 请改用 ``remove_from_allowlist``。
+
+    撤销单个 skill 或全部白名单条目。``skill`` 与 ``all`` 二选一。
+    v1.9 起 ``/permission/revoke`` 仅作为 ``/permission/allowlist/remove`` 的
+    转发别名，下一个 minor 版本会移除。
 
     Args:
         skill: 待撤销的 skill 名，与 ``all`` 互斥。
-        all: 设为 True 时撤销所有授权（忽略 ``skill`` 参数）。
+        all: 设为 True 时撤销所有白名单条目（忽略 ``skill`` 参数）。
     """
     try:
         payload: Dict[str, Any] = {'all': True} if all else {'skill': skill}
         return _permission_post('/permission/revoke', payload)
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+
+def list_allowlist() -> Dict[str, Any]:
+    """GET /permission/allowlist —— 列出当前用户白名单 skill。
+
+    返回 ``{allowlist: [...], count: N}``。白名单 skill 在所有模式下调用时
+    直接放行，无需 grant 流程；可覆盖 Delete / PlayMode / Reload 等高危拦截。
+    白名单由用户在 Unity 面板手动管理；AI 一般不应调用 add/remove。
+    """
+    try:
+        return _permission_get('/permission/allowlist')
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+
+def add_to_allowlist(skill: str) -> Dict[str, Any]:
+    """POST /permission/allowlist/add —— 把 skill 加入白名单。
+
+    注意：白名单命中后该 skill 在所有模式下直接放行，**包括 Delete / PlayMode /
+    Reload 等高危拦截**。建议仅在用户明确授权的会话场景使用
+    （例如批量任务前用户同意把若干 skill 加白名单方便后续直接调）。
+
+    Args:
+        skill: 待加入白名单的 skill 名。
+    """
+    try:
+        return _permission_post('/permission/allowlist/add', {'skill': skill})
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+
+def remove_from_allowlist(skill: str = None, all: bool = False) -> Dict[str, Any]:
+    """POST /permission/allowlist/remove —— 从白名单移除一项或全部。
+
+    传 ``skill="..."`` 移除单项；传 ``all=True`` 清空全部。
+
+    Args:
+        skill: 待移除的 skill 名，与 ``all`` 互斥。
+        all: 设为 True 时清空全部白名单（忽略 ``skill`` 参数）。
+    """
+    try:
+        payload: Dict[str, Any] = {'all': True} if all else {'skill': skill}
+        return _permission_post('/permission/allowlist/remove', payload)
     except Exception as e:
         return {"status": "error", "error": str(e)}
 

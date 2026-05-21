@@ -49,16 +49,21 @@
                                           style="flex-direction: column;" />
                     </ui:VisualElement>
 
-                    <ui:VisualElement name="perm-granted-section"
+                    <ui:VisualElement name="perm-allowlist-section"
                                       style="flex-direction: column; display: none; margin-top: 6px;">
-                        <ui:VisualElement style="flex-direction: row; align-items: center; margin-bottom: 4px;">
-                            <ui:Label name="perm-granted-title" class="bold-label"
-                                      style="flex-grow: 1; font-size: 11px;" />
-                            <ui:Button name="perm-revoke-all-btn" class="mini-btn"
-                                       text="Revoke All" />
-                        </ui:VisualElement>
-                        <ui:VisualElement name="perm-granted-list"
-                                          style="flex-direction: column;" />
+                        <ui:Foldout name="perm-allowlist-foldout" value="false"
+                                    class="perm-allowlist-foldout">
+                            <ui:VisualElement style="flex-direction: row; align-items: center; margin-bottom: 4px;">
+                                <ui:VisualElement style="flex-grow: 1;" />
+                                <ui:Button name="perm-allowlist-add-btn" class="mini-btn"
+                                           text="+ Add Skill"
+                                           style="margin-right: 4px;" />
+                                <ui:Button name="perm-allowlist-clear-btn" class="mini-btn"
+                                           text="Clear All" />
+                            </ui:VisualElement>
+                            <ui:VisualElement name="perm-allowlist-list"
+                                              style="flex-direction: column;" />
+                        </ui:Foldout>
                     </ui:VisualElement>
 
                     <ui:VisualElement name="row-audit"

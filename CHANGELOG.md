@@ -2,6 +2,35 @@
 
 All notable changes to **UnitySkills** will be documented in this file.
 
+## [1.9.1] - 2026-05-21
+
+### Changed
+- **权限系统拆分为两条独立通道** —— 用户管理的 Allowlist（可覆盖 Delete / PlayMode / Reload 等高危拦截）+ 单次一步执行的 Approval grant（不再持久化）。原"批准后 GrantedSkills 永久自动放行"语义移除：grant 现在每次都要重新走，持久放行交给 Allowlist。
+- **`/permission/grant` 改为一步执行** —— Grant 通过的同一次请求里，服务端直接执行原 skill 并在响应里返回 ``{ok: true, executed: true, skill, result}``，AI 不再需要重放原 skill 调用。Panel 渠道下用户点完 Approve 后，AI 同样调一次 `/permission/grant` 拿 `result`。args 字段在 grant 端点可省略，服务端用 entry 缓存的原 args 校验+执行。
+- **设置抽屉 "Granted Skills" 重命名为 "Allowlist Skills"** —— 整段（含 `+ Add Skill` / `Clear All` 按钮和列表）包进 Foldout 整体可折叠，节省抽屉空间；已授权 skill 按 Category 二级折叠分组，未注册的归 `(Unknown)` 组。
+- **`/permission/status` 字段 `granted` 重命名为 `allowlist`** —— 保留 `granted` 一版本作为 deprecated 别名，下个 minor 版本移除。
+
+### Added
+- **Allowlist 多选弹窗（`AllowlistPickerWindow`）** —— UXML + USS 模板驱动，含顶部搜索框（按 name / category 实时过滤）、按 Category 折叠分组、每组 `Select all in group` / `Clear` 一键勾选、底部 `Add Selected (N)` 汇总；提交时若含高危 skill 弹一次合并确认对话框列出所有高危名；全部文案走 `PermissionUiHelpers.L` 双语 i18n。
+- **3 个新 REST 端点** —— `GET /permission/allowlist`、`POST /permission/allowlist/add`、`POST /permission/allowlist/remove`（body `{skill}` 或 `{all: true}`），统一 Allowlist 的查询与增删。
+- **Python 客户端 3 个辅助函数** —— `list_allowlist()` / `add_to_allowlist(skill)` / `remove_from_allowlist(skill=None, all=False)`，与 REST 端点一一对应。
+- **`SkillsModeManager` 新 API** —— `AllowlistSkills` / `IsInAllowlist` / `AddToAllowlist` / `RemoveFromAllowlist` / `ClearAllowlist`；internal `TryGrantAndReturnArgs` / `ConsumeOneShotBypass` / `TryPeekArgsJson` 支持一步执行。
+
+### Fixed
+- **修复 12 处伪 GUID 碰撞风险** —— `GameObjectFinder.cs` / `UnitySkills.Editor.asmdef` / `Editor` 目录 / `Icons` 目录 / 4 个 Agent icon / 3 个 UI Controller / `SettingsDrawer.uxml` 的 `.meta` 全部替换为 uuid4 真随机 GUID。原伪 GUID（如 `112233...ff00`、`f1b2c3d4...abcde`、`8a7b6c5d...4c3d`）字符模式可猜测，与第三方包碰撞概率比真随机高数个数量级；同类问题曾在 v1.8.x 造成 `ValidationSkills.cs` 被排除导入引发 CS0103。已 grep 验证零外部引用。
+- **`AllowlistPickerWindow` 初次打开显示 "All in allowlist" 假象** —— `GetWindow` 触发 `CreateGUI` 时 `_grouped` 还未加载导致空状态被渲染；修复为在 `CreateGUI` 内先 `LoadCandidates` 再绑定 UI。
+
+### Migrated
+- **EditorPrefs 一次性迁移** —— 首次启动时把老 key `UnitySkills_GrantedSkills` 自动迁移到 `UnitySkills_AllowlistSkills`，写入 `UnitySkills_AllowlistMigratedFromGranted = true` 防重复；老 key 保留不删（回滚标记）。用户无感知：原已批准的 skill 现在变成"白名单"，行为一致（仍直接放行）。
+
+### Deprecated
+- **`POST /permission/revoke`** —— 仍然工作，但已转发到 `/permission/allowlist/remove`，下个 minor 版本会移除。
+- **Python `revoke_permission()`** —— 同上，docstring 已标注，请改用 `remove_from_allowlist()`。
+- **`SkillsModeManager` Obsolete 别名** —— `GrantedSkills` / `Revoke(name)` / `RevokeAll()` 仅作过渡兼容保留一版本，请改用 `AllowlistSkills` / `RemoveFromAllowlist` / `ClearAllowlist`。
+
+### Changed (cont.)
+- **版本号更新** —— `SkillsLogger.Version` / `package.json` / Python helper `__version__` / `agent.md` 同步提升到 `1.9.1`。
+
 ## [1.9.0] - 2026-05-20
 
 ### ⚠ BREAKING CHANGES

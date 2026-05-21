@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 using UnityEngine.UIElements;
 using UnityEditor;
@@ -48,10 +49,11 @@ namespace UnitySkills
         private VisualElement _pendingSection;
         private Label         _pendingTitle;
         private VisualElement _pendingList;
-        private VisualElement _grantedSection;
-        private Label         _grantedTitle;
-        private VisualElement _grantedList;
-        private Button        _revokeAllBtn;
+        private VisualElement _allowlistSection;
+        private Foldout       _allowlistFoldout;
+        private VisualElement _allowlistList;
+        private Button        _allowlistClearBtn;
+        private Button        _allowlistAddBtn;
         private Button        _viewAuditBtn;
 
         // Server group
@@ -155,10 +157,11 @@ namespace UnitySkills
             _pendingSection      = _drawerContainer.Q<VisualElement>("perm-pending-section");
             _pendingTitle        = _drawerContainer.Q<Label>("perm-pending-title");
             _pendingList         = _drawerContainer.Q<VisualElement>("perm-pending-list");
-            _grantedSection      = _drawerContainer.Q<VisualElement>("perm-granted-section");
-            _grantedTitle        = _drawerContainer.Q<Label>("perm-granted-title");
-            _grantedList         = _drawerContainer.Q<VisualElement>("perm-granted-list");
-            _revokeAllBtn        = _drawerContainer.Q<Button>("perm-revoke-all-btn");
+            _allowlistSection    = _drawerContainer.Q<VisualElement>("perm-allowlist-section");
+            _allowlistFoldout    = _drawerContainer.Q<Foldout>("perm-allowlist-foldout");
+            _allowlistList       = _drawerContainer.Q<VisualElement>("perm-allowlist-list");
+            _allowlistClearBtn   = _drawerContainer.Q<Button>("perm-allowlist-clear-btn");
+            _allowlistAddBtn     = _drawerContainer.Q<Button>("perm-allowlist-add-btn");
             _viewAuditBtn        = _drawerContainer.Q<Button>("perm-view-audit-btn");
 
             _serverGroupTitle = _drawerContainer.Q<Label>("group-server-title");
@@ -208,8 +211,11 @@ namespace UnitySkills
                         SkillsModeManager.PanelApprovalRequired = evt.newValue;
                 });
 
-            if (_revokeAllBtn != null)
-                _revokeAllBtn.clicked += () => SkillsModeManager.RevokeAll();
+            if (_allowlistClearBtn != null)
+                _allowlistClearBtn.clicked += () => SkillsModeManager.ClearAllowlist();
+
+            if (_allowlistAddBtn != null)
+                _allowlistAddBtn.clicked += OnAddAllowlistClicked;
 
             if (_viewAuditBtn != null)
                 _viewAuditBtn.clicked += () => UnitySkillsAuditWindow.ShowWindow();
@@ -353,13 +359,17 @@ namespace UnitySkills
                     "When checked, grant tokens must be Approved here on the panel; otherwise verbal consent in the AI chat is enough.",
                     "勾选后 grant token 必须在此面板点 Approve 才生效；否则 AI 对话中用户文字同意即可。");
 
-            if (_revokeAllBtn != null)
-                _revokeAllBtn.text = PermissionUiHelpers.L("perm_revoke_all", "Revoke All", "全部撤销");
+            if (_allowlistClearBtn != null)
+                _allowlistClearBtn.text = PermissionUiHelpers.L("perm_allowlist_clear_all",
+                    "Clear All", "全部清除");
+            if (_allowlistAddBtn != null)
+                _allowlistAddBtn.text = PermissionUiHelpers.L("perm_add_skill_btn",
+                    "+ Add Skill", "+ 添加 Skill");
             if (_viewAuditBtn != null)
                 _viewAuditBtn.text = PermissionUiHelpers.L("perm_view_audit_log",
                     "View Audit Log", "查看审计日志");
 
-            // Pending / Granted titles include counts, so rebuild via RefreshPermissionsUi
+            // Pending / Allowlist titles include counts, so rebuild via RefreshPermissionsUi
             // to pick up the new language strings together with the live data.
             RefreshPermissionsUi();
 
@@ -463,25 +473,27 @@ namespace UnitySkills
                 _pendingList.Clear();
             }
 
-            // 4) Granted 列表 — Approval/Auto 显示（Bypass 隐藏）
-            var granted = SkillsModeManager.GrantedSkills;
-            bool showGranted = mode != SkillsOperatingMode.Bypass;
-            SetDisplay(_grantedSection, showGranted);
-            if (showGranted)
+            // 4) Allowlist 列表 — Approval/Auto 显示（Bypass 隐藏）
+            var allowlist = SkillsModeManager.AllowlistSkills;
+            bool showAllowlist = mode != SkillsOperatingMode.Bypass;
+            SetDisplay(_allowlistSection, showAllowlist);
+            if (showAllowlist)
             {
-                if (_grantedTitle != null)
-                    _grantedTitle.text = string.Format(
-                        PermissionUiHelpers.L("perm_granted_skills_fmt",
-                            "Granted Skills ({0})",
-                            "已授权 Skills ({0})"),
-                        granted.Count);
-                if (_revokeAllBtn != null)
-                    _revokeAllBtn.SetEnabled(granted.Count > 0);
-                RebuildGrantedList(granted);
+                if (_allowlistFoldout != null)
+                    _allowlistFoldout.text = string.Format(
+                        PermissionUiHelpers.L("perm_allowlist_skills_fmt",
+                            "Allowlist Skills ({0})",
+                            "白名单 Skills ({0})"),
+                        allowlist.Count);
+                if (_allowlistAddBtn != null)
+                    _allowlistAddBtn.SetEnabled(true);
+                if (_allowlistClearBtn != null)
+                    _allowlistClearBtn.SetEnabled(allowlist.Count > 0);
+                RebuildAllowlistList(allowlist);
             }
-            else if (_grantedList != null)
+            else if (_allowlistList != null)
             {
-                _grantedList.Clear();
+                _allowlistList.Clear();
             }
         }
 
@@ -547,25 +559,72 @@ namespace UnitySkills
             return card;
         }
 
-        private void RebuildGrantedList(IReadOnlyCollection<string> granted)
+        /// <summary>
+        /// "+ Add Skill" 按钮回调：弹出按 Category 分组的 GenericMenu，让用户手动把 skill
+        /// 加入白名单。高危 skill（RiskLevel=high / Delete / PlayMode / Reload）会先弹
+        /// 二次确认 dialog，避免一键放行严重操作。
+        ///
+        /// 高危判定特意在 UI 层重做（而不是反射 SkillsModeManager.IsForbiddenInSemi），
+        /// 保持 ModeManager 的可见性边界不被 UI 反向污染。
+        /// </summary>
+        /// <summary>
+        /// 打开 AllowlistPickerWindow —— 支持搜索、按 Category 分组勾选、整组一键选中、
+        /// 提交时合并高危确认。窗口自负责调 AddToAllowlist；本控制器在 OnChanged 链路上自动刷新列表。
+        /// </summary>
+        private void OnAddAllowlistClicked()
         {
-            if (_grantedList == null) return;
-            _grantedList.Clear();
+            AllowlistPickerWindow.Open();
+        }
 
-            if (granted.Count == 0)
+        private void RebuildAllowlistList(IReadOnlyCollection<string> allowlist)
+        {
+            if (_allowlistList == null) return;
+            _allowlistList.Clear();
+
+            if (allowlist.Count == 0)
             {
-                var empty = new Label(PermissionUiHelpers.L("perm_no_granted",
-                    "No granted skills.", "暂无已授权 skill。"));
+                var empty = new Label(PermissionUiHelpers.L("perm_no_allowlist",
+                    "No allowlisted skills.", "白名单为空。"));
                 empty.AddToClassList("setting-hint");
-                _grantedList.Add(empty);
+                _allowlistList.Add(empty);
                 return;
             }
 
-            foreach (var name in granted)
-                _grantedList.Add(BuildGrantedRow(name));
+            // 用 SkillRouter snapshot 解析 name → Category；未注册 skill（注册表 refresh 间隔等）
+            // 归入特殊分组 "(Unknown)" 而不是丢弃，让用户至少能看到并 Remove。
+            var nameToCategory = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            try
+            {
+                foreach (var s in SkillRouter.GetAllSkillsSnapshot() ?? Array.Empty<SkillRouter.SkillInfo>())
+                {
+                    if (s != null && !string.IsNullOrEmpty(s.Name))
+                        nameToCategory[s.Name] = s.Category.ToString();
+                }
+            }
+            catch { /* snapshot 失败时全部归入 Unknown 分组 */ }
+
+            var grouped = allowlist
+                .GroupBy(n => nameToCategory.TryGetValue(n, out var c) ? c : "(Unknown)")
+                .OrderBy(g => g.Key, StringComparer.OrdinalIgnoreCase);
+
+            foreach (var group in grouped)
+            {
+                var items = group.OrderBy(n => n, StringComparer.OrdinalIgnoreCase).ToList();
+                var foldout = new Foldout
+                {
+                    text = $"{group.Key}  ({items.Count})",
+                    value = false, // 默认折叠，省空间；用户点开展看
+                };
+                foldout.style.marginTop = 2;
+
+                foreach (var name in items)
+                    foldout.Add(BuildAllowlistRow(name));
+
+                _allowlistList.Add(foldout);
+            }
         }
 
-        private static VisualElement BuildGrantedRow(string skillName)
+        private static VisualElement BuildAllowlistRow(string skillName)
         {
             var row = new VisualElement
             {
@@ -574,12 +633,12 @@ namespace UnitySkills
             var label = new Label(skillName) { style = { flexGrow = 1, fontSize = 11 } };
             row.Add(label);
 
-            var revokeBtn = new Button(() => SkillsModeManager.Revoke(skillName))
+            var removeBtn = new Button(() => SkillsModeManager.RemoveFromAllowlist(skillName))
             {
-                text = PermissionUiHelpers.L("perm_revoke", "Revoke", "撤销")
+                text = PermissionUiHelpers.L("perm_remove_from_allowlist", "Remove", "移除")
             };
-            revokeBtn.AddToClassList("mini-btn");
-            row.Add(revokeBtn);
+            removeBtn.AddToClassList("mini-btn");
+            row.Add(removeBtn);
             return row;
         }
 
@@ -610,16 +669,16 @@ namespace UnitySkills
         private static string ComputePermSnapshot()
         {
             var pending = SkillsModeManager.PendingGrantRequests;
-            var granted = SkillsModeManager.GrantedSkills;
+            var allowlist = SkillsModeManager.AllowlistSkills;
             var sb = new System.Text.StringBuilder(64);
             sb.Append((int)SkillsModeManager.CurrentMode).Append('|');
             sb.Append(SkillsModeManager.PanelApprovalRequired ? '1' : '0').Append('|');
             sb.Append('p').Append(pending.Count).Append(':');
             for (int i = 0; i < pending.Count; i++)
                 sb.Append(pending[i].Token).Append(',');
-            sb.Append('|').Append('g').Append(granted.Count).Append(':');
-            foreach (var g in granted)
-                sb.Append(g).Append(',');
+            sb.Append('|').Append('a').Append(allowlist.Count).Append(':');
+            foreach (var s in allowlist)
+                sb.Append(s).Append(',');
             return sb.ToString();
         }
 

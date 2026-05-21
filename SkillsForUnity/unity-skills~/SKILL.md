@@ -44,22 +44,38 @@ On session start (or before the first skill call), call `GET /health` and read:
 
 ### Approval Mode Grant Protocol
 
+Approval grants are **single-shot one-step execution**: a successful `/permission/grant` call runs the original skill server-side and returns the result in the same response. You do **not** retry the skill after grant. Grants are **not** persisted — calling the same skill a second time will hit `MODE_RESTRICTED` again and must go through grant again. If the user wants permanent bypass for a skill, direct them to the Allowlist (see below).
+
 On `MODE_RESTRICTED`, branch on `details.approvalChannel`:
 
 **Dialog channel** (`"dialog"`, default — `panelApprovalRequired = false`)
 
 1. Tell the user in chat: "要调用 `<skill>` 来 `<目的>`，参数 `<argsSummary>`，请求码 #`<token 前 6 位>`，是否允许？"
-2. After explicit user consent, call `POST /permission/grant { skill, token, args }`
-3. Retry the original skill call
+2. After explicit user consent, call `POST /permission/grant { skill, token, args }` **once**
+3. On success, the response contains `{ ok: true, executed: true, skill, result: <Execute output> }` — the skill has already run server-side. Consume `result` directly; **do not call the original skill endpoint again**
 
 **Panel channel** (`"panel"`, when `panelApprovalRequired = true`)
 
 1. Tell the user in chat: "要调用 `<skill>` 来 `<目的>`，请到 `Window > UnitySkills` 面板的 Pending Grant Requests 点 `[Approve]`（请求码 #`<token 前 6 位>`）"
-2. **Do not call `/permission/grant`** — calling it before panel approval returns `GRANT_PENDING_APPROVAL`
-3. Optionally poll `GET /permission/status?token=<token>` to observe state
-4. Once the user presses Approve in the panel, the skill is added to `GrantedSkills` automatically — **retry the original skill directly**, no extra grant call needed
+2. **Do not call `/permission/grant` yet** — calling it before the user clicks Approve returns `GRANT_PENDING_APPROVAL`
+3. Poll `GET /permission/status?token=<token>` to observe the request state (look at `focus.approvedByPanel`)
+4. Once the user has pressed Approve in the panel, call `POST /permission/grant { skill, token, args }` **once** — this takes the Granted branch and triggers one-step execution, returning `{ ok: true, executed: true, skill, result }`. Consume `result` directly; **do not call the original skill endpoint again**
 
-On `MODE_FORBIDDEN`: the skill is auto-classified as NeverInSemi (Delete / Domain Reload / Play Mode / high-risk / fallback list). It is callable only under Bypass. **Do not attempt the grant flow** — tell the user the action requires Bypass mode or offer an alternative skill.
+> Note: panel approval no longer auto-routes the result back to the AI. The Approve click only flips the request into the Granted state; AI must follow up with one `/permission/grant` call to fetch the execution result.
+
+On `MODE_FORBIDDEN`: the skill is auto-classified as NeverInSemi (Delete / Domain Reload / Play Mode / high-risk / fallback list). It is callable only under Bypass, **or** if the user has explicitly added it to the Allowlist (see below). **Do not attempt the grant flow** — tell the user the action requires Bypass mode, an Allowlist entry, or offer an alternative skill.
+
+### Allowlist (user-managed permanent bypass)
+
+The Allowlist is a **user-managed** permanent whitelist of skill names, configured in `Window > UnitySkills > Server` settings drawer (Allowlist Skills section / `+ Add Skill` button). It is independent of Approval grants:
+
+- Allowlisted skills execute directly under any mode — the server skips the Approval/MODE_RESTRICTED gate
+- **An Allowlist entry overrides MODE_FORBIDDEN** for that skill (covers Delete / MayEnterPlayMode / MayTriggerReload / `RiskLevel="high"`). This is intentional: the user has explicitly opted in
+- The list is **opaque to the AI**: allowlisted skills look like normal successful calls, never returning `MODE_RESTRICTED`
+- **The AI should not call `/permission/allowlist/add` on its own initiative.** Only call it when the user has explicitly authorized a session-scoped bulk add (e.g. "把这几个 skill 加白名单方便我后面批量调"); otherwise direct the user to add entries through the panel
+- Allowlist endpoints: `GET /permission/allowlist` / `POST /permission/allowlist/add` / `POST /permission/allowlist/remove` (body `{skill}` or `{all: true}`)
+
+> The previous `GrantedSkills` semantics ("after one grant the skill is permanently auto-allowed") has been removed. Grants are now single-shot. Permanent allow == Allowlist; one-shot approval == grant.
 
 ### Auto Mode Self-Assessment
 

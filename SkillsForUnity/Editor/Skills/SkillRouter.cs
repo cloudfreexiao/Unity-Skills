@@ -1227,6 +1227,9 @@ namespace UnitySkills
             argsForHash.Remove("_confirm");
             var argsJson = argsForHash.ToString(Formatting.None);
 
+            // 关键：必须先于 CheckAccess 读取 allowlist 状态——CheckAccess 内部会消费 one-shot 标记，
+            // 之后 IsInAllowlist 仍可重复查询。先记下 allowlist 命中，便于审计区分 allowlist vs oneShot vs auto。
+            bool allowlistHit = SkillsModeManager.IsInAllowlist(skill.Name);
             var access = SkillsModeManager.CheckAccess(skill);
             var currentMode = SkillsModeManager.CurrentMode;
             var modeWire = SkillsModeManager.ModeToWire(currentMode);
@@ -1238,6 +1241,13 @@ namespace UnitySkills
                         && (skill.MutatesScene || skill.MutatesAssets
                             || skill.Operation.HasFlag(SkillOperation.Modify)
                             || skill.Operation.HasFlag(SkillOperation.Create));
+                    // grantSource：allowlist 命中最高优先；否则若是 Bypass 模式视作 bypass；
+                    // 其余非 Allowlist/非 Bypass 的 Allowed 都归类为 auto（CheckAccess 在调用前已消费了
+                    // 任何 one-shot 令牌，无法事后区分；这是当前可观察到的最佳近似）。
+                    string grantSource;
+                    if (allowlistHit) grantSource = "allowlist";
+                    else if (currentMode == SkillsOperatingMode.Bypass) grantSource = "bypass";
+                    else grantSource = "auto";
                     SkillsAuditLog.Append("call", new
                     {
                         skill = name,
@@ -1245,6 +1255,8 @@ namespace UnitySkills
                         skillMode = SkillsModeManager.SkillModeToWire(skill.Mode),
                         result = "allowed",
                         highImpact,
+                        allowlistHit,
+                        grantSource,
                     });
                     return null;
 
@@ -1297,8 +1309,8 @@ namespace UnitySkills
                             tokenTtlSeconds = ttl,
                             argsSummary = pendingSummary?.ArgsSummary,
                             hint = channel == SkillsModeManager.ApprovalChannel.Dialog
-                                ? "Ask the user, then POST /permission/grant {skill, token}; on success, re-call this skill."
-                                : "Tell the user to click Approve on the Unity panel; then re-call this skill. Do not poll grant.",
+                                ? "Ask the user; on consent POST /permission/grant {skill, token}. v1.9 方案 B: grant 调用本身会一步执行该 skill 并返回结果（response.result）——无需再 re-call 原 skill。"
+                                : "Tell the user to click Approve on the Unity panel; then POST /permission/grant {skill, token} once. That grant call executes the skill in-line and returns the result. Do not poll grant; do not re-call the original skill.",
                         },
                         retryStrategy: SkillErrorResponse.RetryAskUserAndGrant);
             }

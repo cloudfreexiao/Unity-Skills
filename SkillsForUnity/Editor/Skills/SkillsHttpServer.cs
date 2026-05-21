@@ -1171,7 +1171,7 @@ namespace UnitySkills
             if (path == "/" || string.Equals(path, "/health", StringComparison.OrdinalIgnoreCase))
             {
                 int pendingCount = SkillsModeManager.PendingGrantRequests.Count;
-                int grantedCount = SkillsModeManager.GrantedSkills.Count;
+                int allowlistCount = SkillsModeManager.AllowlistSkills.Count;
                 job.StatusCode = 200;
                 job.ResponseJson = JsonConvert.SerializeObject(new {
                     status = "ok",
@@ -1190,7 +1190,7 @@ namespace UnitySkills
                     currentMode = SkillsModeManager.ModeToWire(SkillsModeManager.CurrentMode),
                     panelApprovalRequired = SkillsModeManager.PanelApprovalRequired,
                     pendingCount,
-                    grantedCount,
+                    allowlistCount,
                     threads = new {
                         listenerAlive = _listenerThread?.IsAlive ?? false,
                         keepAliveAlive = _keepAliveThread?.IsAlive ?? false,
@@ -1362,6 +1362,9 @@ namespace UnitySkills
                         "POST /permission/grant",
                         "POST /permission/approve",
                         "POST /permission/deny",
+                        "GET /permission/allowlist",
+                        "POST /permission/allowlist/add",
+                        "POST /permission/allowlist/remove",
                         "POST /permission/revoke",
                         "GET /permission/audit"
                     }
@@ -1565,6 +1568,12 @@ namespace UnitySkills
                 return;
             }
 
+            if (string.Equals(path, "/permission/allowlist", StringComparison.OrdinalIgnoreCase) && job.HttpMethod == "GET")
+            {
+                HandlePermissionAllowlistList(job);
+                return;
+            }
+
             if (job.HttpMethod == "POST")
             {
                 if (string.Equals(path, "/permission/grant", StringComparison.OrdinalIgnoreCase))
@@ -1582,8 +1591,19 @@ namespace UnitySkills
                     HandlePermissionDeny(job);
                     return;
                 }
+                if (string.Equals(path, "/permission/allowlist/add", StringComparison.OrdinalIgnoreCase))
+                {
+                    HandlePermissionAllowlistAdd(job);
+                    return;
+                }
+                if (string.Equals(path, "/permission/allowlist/remove", StringComparison.OrdinalIgnoreCase))
+                {
+                    HandlePermissionAllowlistRemove(job);
+                    return;
+                }
                 if (string.Equals(path, "/permission/revoke", StringComparison.OrdinalIgnoreCase))
                 {
+                    // Deprecated alias: forwards to allowlist/remove logic, response includes deprecated=true.
                     HandlePermissionRevoke(job);
                     return;
                 }
@@ -1601,6 +1621,9 @@ namespace UnitySkills
                         "POST /permission/grant",
                         "POST /permission/approve",
                         "POST /permission/deny",
+                        "GET /permission/allowlist",
+                        "POST /permission/allowlist/add",
+                        "POST /permission/allowlist/remove",
                         "POST /permission/revoke",
                         "GET /permission/audit"
                     }
@@ -1614,7 +1637,7 @@ namespace UnitySkills
             string focusToken = qs.TryGetValue("token", out var tokenVal) ? tokenVal : null;
 
             var pending = SkillsModeManager.PendingGrantRequests;
-            var granted = SkillsModeManager.GrantedSkills;
+            var allowlist = SkillsModeManager.AllowlistSkills;
 
             object focusEntry = null;
             if (!string.IsNullOrEmpty(focusToken))
@@ -1636,11 +1659,14 @@ namespace UnitySkills
             }
 
             job.StatusCode = 200;
+            // v1.9 字段重命名：`granted` → `allowlist`。`granted` 字段作为兼容别名保留一个版本，
+            // 下个 minor 版本会移除——客户端应迁移到 `allowlist` 字段。
             job.ResponseJson = JsonConvert.SerializeObject(new
             {
                 mode = SkillsModeManager.ModeToWire(SkillsModeManager.CurrentMode),
                 panelApprovalRequired = SkillsModeManager.PanelApprovalRequired,
-                granted = granted,
+                allowlist = allowlist,
+                granted = allowlist, // deprecated alias — remove in next minor
                 pending = pending.Select(p => new
                 {
                     token = p.Token,
@@ -1654,8 +1680,13 @@ namespace UnitySkills
                 focus = focusEntry,
                 counts = new
                 {
-                    granted = granted.Count,
+                    allowlist = allowlist.Count,
+                    granted = allowlist.Count, // deprecated alias
                     pending = pending.Count,
+                },
+                deprecated = new
+                {
+                    granted = "Use 'allowlist' instead. The 'granted' field will be removed in a future minor version.",
                 },
             }, _jsonSettings);
         }
@@ -1666,7 +1697,6 @@ namespace UnitySkills
 
             string skill = body.TryGetValue("skill", StringComparison.OrdinalIgnoreCase, out var sToken) ? sToken?.ToString() : null;
             string token = body.TryGetValue("token", StringComparison.OrdinalIgnoreCase, out var tToken) ? tToken?.ToString() : null;
-            string argsJson = ExtractArgsJson(body);
 
             if (string.IsNullOrWhiteSpace(skill) || string.IsNullOrWhiteSpace(token))
             {
@@ -1677,13 +1707,70 @@ namespace UnitySkills
                 return;
             }
 
-            var outcome = SkillsModeManager.TryGrantDetailed(skill, token, argsJson);
+            // args 字段可选——方案 B 优先用 entry 缓存的原 argsJson。
+            // body 携带 args 时按现有规则参与哈希校验；未携带时直接读 entry 缓存（TryPeekArgsJson）。
+            bool argsProvided = body.TryGetValue("args", StringComparison.OrdinalIgnoreCase, out var argsToken)
+                                && argsToken != null && argsToken.Type != JTokenType.Null;
+            string argsJson;
+            if (argsProvided)
+            {
+                argsJson = ExtractArgsJson(body);
+            }
+            else
+            {
+                // 直接从 entry 取缓存的原 argsJson —— 既对零参 skill 工作，也对带参 skill 工作，
+                // 让 AI 调 grant 时只需提供 token，符合"一步执行"语义。
+                // entry 不存在/过期时回退 "{}"，让下方 TryGrantAndReturnArgs 返回 Invalid 给出明确错误。
+                argsJson = SkillsModeManager.TryPeekArgsJson(token) ?? "{}";
+            }
+
+            // 注意：HandlePermissionGrant 由 ProcessJobQueue 在主线程 (EditorApplication.update) 调用，
+            // 所以 TryGrantAndReturnArgs 设置的 ThreadStatic one-shot 令牌、以及后续的 SkillRouter.Execute
+            // 都在同一个主线程内执行——线程安全前提成立，无需额外 dispatch。
+            var (outcome, cachedSkill, cachedArgs) = SkillsModeManager.TryGrantAndReturnArgs(skill, token, argsJson);
             switch (outcome)
             {
                 case GrantOutcome.Granted:
+                {
+                    // 方案 B 一步执行：one-shot 令牌已由 TryGrantAndReturnArgs 设置在当前线程，
+                    // SkillRouter.Execute → CheckAccess 会立刻消费该令牌、单次放行。
+                    string execJson;
+                    try
+                    {
+                        execJson = SkillRouter.Execute(cachedSkill, cachedArgs);
+                    }
+                    catch (Exception ex)
+                    {
+                        SkillsLogger.LogWarning($"grant_executed failed for '{cachedSkill}': {ex.Message}");
+                        execJson = SkillErrorResponse.Build(
+                            SkillErrorCode.Internal,
+                            ex.Message,
+                            skill: cachedSkill,
+                            details: new { type = ex.GetType().Name },
+                            retryStrategy: SkillErrorResponse.RetryWaitAndRetry);
+                    }
+
+                    SkillsAuditLog.Append("grant_executed", new { skill = cachedSkill, token });
+
+                    // 尝试把 execJson 内联为 JSON 对象，方便上层直接读字段；失败兜底为字符串。
+                    object resultPayload;
+                    try { resultPayload = JObject.Parse(execJson); }
+                    catch
+                    {
+                        try { resultPayload = JToken.Parse(execJson); }
+                        catch { resultPayload = execJson; }
+                    }
+
                     job.StatusCode = 200;
-                    job.ResponseJson = JsonConvert.SerializeObject(new { ok = true, skill }, _jsonSettings);
+                    job.ResponseJson = JsonConvert.SerializeObject(new
+                    {
+                        ok = true,
+                        skill = cachedSkill,
+                        executed = true,
+                        result = resultPayload,
+                    }, _jsonSettings);
                     return;
+                }
                 case GrantOutcome.PendingApproval:
                     job.StatusCode = 200;
                     job.ResponseJson = SkillErrorResponse.Build(
@@ -1692,7 +1779,7 @@ namespace UnitySkills
                         skill: skill,
                         details: new
                         {
-                            hint = "Tell the user to click Approve on the Unity panel; then re-call the original skill. Do not retry /permission/grant.",
+                            hint = "Tell the user to click Approve on the Unity panel; then POST /permission/grant again to trigger one-step execution.",
                         },
                         retryStrategy: SkillErrorResponse.RetryAskUserAndGrant,
                         extra: new Dictionary<string, object> { ["ok"] = false, ["reason"] = "GRANT_PENDING_APPROVAL" });
@@ -1741,12 +1828,21 @@ namespace UnitySkills
             bool all = body.TryGetValue("all", StringComparison.OrdinalIgnoreCase, out var allToken)
                 && allToken.Type == JTokenType.Boolean && allToken.ToObject<bool>();
 
+            // Deprecated alias: forwards to AllowlistRemove / ClearAllowlist. Response carries
+            // `deprecated: true` so clients can migrate to /permission/allowlist/remove.
             if (all)
             {
-                int before = SkillsModeManager.GrantedSkills.Count;
-                SkillsModeManager.RevokeAll();
+                int before = SkillsModeManager.AllowlistSkills.Count;
+                SkillsModeManager.ClearAllowlist();
                 job.StatusCode = 200;
-                job.ResponseJson = JsonConvert.SerializeObject(new { ok = true, revoked = before }, _jsonSettings);
+                job.ResponseJson = JsonConvert.SerializeObject(new
+                {
+                    ok = true,
+                    revoked = before,
+                    allowlistCount = SkillsModeManager.AllowlistSkills.Count,
+                    deprecated = true,
+                    deprecationHint = "Use POST /permission/allowlist/remove with {all:true} instead.",
+                }, _jsonSettings);
                 return;
             }
 
@@ -1759,10 +1855,102 @@ namespace UnitySkills
                 return;
             }
 
-            bool wasGranted = SkillsModeManager.GrantedSkills.Contains(skill);
-            SkillsModeManager.Revoke(skill);
+            bool removed = SkillsModeManager.RemoveFromAllowlist(skill);
             job.StatusCode = 200;
-            job.ResponseJson = JsonConvert.SerializeObject(new { ok = true, revoked = wasGranted ? 1 : 0, skill }, _jsonSettings);
+            job.ResponseJson = JsonConvert.SerializeObject(new
+            {
+                ok = true,
+                revoked = removed ? 1 : 0,
+                skill,
+                allowlistCount = SkillsModeManager.AllowlistSkills.Count,
+                deprecated = true,
+                deprecationHint = "Use POST /permission/allowlist/remove with {skill:'<name>'} instead.",
+            }, _jsonSettings);
+        }
+
+        // ===== Allowlist endpoints (v1.9 改版) =====
+
+        private static void HandlePermissionAllowlistList(RequestJob job)
+        {
+            var allowlist = SkillsModeManager.AllowlistSkills;
+            job.StatusCode = 200;
+            job.ResponseJson = JsonConvert.SerializeObject(new
+            {
+                allowlist = allowlist,
+                count = allowlist.Count,
+            }, _jsonSettings);
+        }
+
+        private static void HandlePermissionAllowlistAdd(RequestJob job)
+        {
+            if (!TryParseBody(job, out var body)) return;
+            string skill = body.TryGetValue("skill", StringComparison.OrdinalIgnoreCase, out var s) ? s?.ToString() : null;
+            if (string.IsNullOrWhiteSpace(skill))
+            {
+                WritePermissionError(job, 400, SkillErrorCode.MissingParam,
+                    "'skill' is required.",
+                    retry: SkillErrorResponse.RetryFixAndRetry);
+                return;
+            }
+            if (!SkillRouter.HasSkill(skill))
+            {
+                WritePermissionError(job, 400, SkillErrorCode.SkillNotFound,
+                    $"Unknown skill: {skill}",
+                    details: new { skill, hint = "Use GET /skills to list registered skill names." },
+                    retry: SkillErrorResponse.RetryFixAndRetry);
+                return;
+            }
+
+            bool added = SkillsModeManager.AddToAllowlist(skill);
+            job.StatusCode = 200;
+            job.ResponseJson = JsonConvert.SerializeObject(new
+            {
+                ok = true,
+                skill,
+                added,
+                allowlistCount = SkillsModeManager.AllowlistSkills.Count,
+            }, _jsonSettings);
+        }
+
+        private static void HandlePermissionAllowlistRemove(RequestJob job)
+        {
+            if (!TryParseBody(job, out var body)) return;
+            bool all = body.TryGetValue("all", StringComparison.OrdinalIgnoreCase, out var allToken)
+                && allToken.Type == JTokenType.Boolean && allToken.ToObject<bool>();
+
+            if (all)
+            {
+                int before = SkillsModeManager.AllowlistSkills.Count;
+                SkillsModeManager.ClearAllowlist();
+                job.StatusCode = 200;
+                job.ResponseJson = JsonConvert.SerializeObject(new
+                {
+                    ok = true,
+                    removed = before > 0,
+                    removedCount = before,
+                    allowlistCount = SkillsModeManager.AllowlistSkills.Count,
+                }, _jsonSettings);
+                return;
+            }
+
+            string skill = body.TryGetValue("skill", StringComparison.OrdinalIgnoreCase, out var s) ? s?.ToString() : null;
+            if (string.IsNullOrWhiteSpace(skill))
+            {
+                WritePermissionError(job, 400, SkillErrorCode.MissingParam,
+                    "Provide either 'skill' or 'all:true'.",
+                    retry: SkillErrorResponse.RetryFixAndRetry);
+                return;
+            }
+
+            bool removed = SkillsModeManager.RemoveFromAllowlist(skill);
+            job.StatusCode = 200;
+            job.ResponseJson = JsonConvert.SerializeObject(new
+            {
+                ok = true,
+                skill,
+                removed,
+                allowlistCount = SkillsModeManager.AllowlistSkills.Count,
+            }, _jsonSettings);
         }
 
         private static void HandlePermissionAudit(RequestJob job)
